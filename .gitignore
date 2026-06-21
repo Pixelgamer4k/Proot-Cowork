@@ -1,0 +1,24 @@
+# Built outputs
+*.iml
+.gradle/
+build/
+app/build/
+local.properties
+.cxx/
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# Secrets
+*.keystore
+secrets.properties
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Rootfs (large, user-provided)
+*.tar.gz
+files/rootfs/

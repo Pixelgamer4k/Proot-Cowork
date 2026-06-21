@@ -1,0 +1,12 @@
+Implementation plan for Proot Cowork
+Do deep research so this app doesn't fail and 100% working. Learn from available similar apps on GitHub to get inspiration and recreate their approach so mine don't get fail
+
+This will be a Jetpack compose Android native app
+
+Inspired from Kimi Work or Claude Cowork to automate or do complex tasks with full fledged planning and execution. It will have a self improvement functionality similar to heremes agent. It will have skills options. It will use open AI compatible api keys, api token and model name (openrouter/owl-alpha, etc). It will have agent swarm system and auto orchestra similar to Kimi Work but better.
+
+Upper 16:9 box will be the proot distro desktop on a Termux x11 layer but first it will be a blank screen with plus icon "Add your rootfs" then I will add the custom rootfs built on termux proot distro with your instructions and it will automatically run it and the desktop will appear. As per your step by step instructions I will install all necessary tools, user, "No password for sudo", programs, desktop, scripts, etc so after exporting the proot distro. The Proot Cowork work will itself easily run it with no extra commands and then bind with the ai agents to run automation. It will also have many more important features like plan mode, direct execution mode and shedule for later mode with selectable time and date. It will have a external browser to access the proot files and Artifacts. It will have an external terminal option to interact with the proot terminal to do stuffs manually if I want. It will have power off/on, Reboot, Screenshot button. Many more
+
+Most important part, when building the apk always use GitHub actions to build the debug apk using gh commands as gh is already settled up. No release until all the phases completed
+
+First research, then make the architecture, etc 

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Proot Cowork</string>
+    <string name="add_rootfs">Add your rootfs</string>
+    <string name="add_rootfs_hint">Import a proot-distro rootfs tarball (.tar.gz) built with our setup scripts</string>
+    <string name="desktop_placeholder">Linux desktop will appear here</string>
+    <string name="settings">Settings</string>
+    <string name="api_base_url">API Base URL</string>
+    <string name="api_key">API Key / Token</string>
+    <string name="model_name">Model Name</string>
+    <string name="save">Save</string>
+    <string name="plan_mode">Plan</string>
+    <string name="direct_mode">Execute</string>
+    <string name="schedule_mode">Schedule</string>
+    <string name="power_off">Power Off</string>
+    <string name="reboot">Reboot</string>
+    <string name="screenshot">Screenshot</string>
+    <string name="terminal">Terminal</string>
+    <string name="browser">Files</string>
+    <string name="skills">Skills</string>
+    <string name="agent_hint">Describe a task for the AI agents…</string>
+    <string name="send">Send</string>
+    <string name="import_rootfs">Import Rootfs</string>
+    <string name="rootfs_importing">Importing rootfs…</string>
+    <string name="rootfs_ready">Rootfs ready</string>
+    <string name="no_rootfs">No rootfs installed</string>
+</resources>
