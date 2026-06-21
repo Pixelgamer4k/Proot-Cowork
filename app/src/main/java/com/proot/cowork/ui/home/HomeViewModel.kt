@@ -3,12 +3,13 @@ package com.proot.cowork.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.proot.cowork.data.prefs.RootfsState
 import com.proot.cowork.data.prefs.SettingsRepository
+import com.proot.cowork.data.rootfs.RootfsRepository
 import com.proot.cowork.domain.agent.AgentMessage
 import com.proot.cowork.domain.agent.ExecutionMode
 import com.proot.cowork.domain.agent.MessageRole
 import com.proot.cowork.domain.agent.SwarmTask
+import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -32,51 +33,34 @@ data class HomeUiState(
 
 class HomeViewModel(
     private val settingsRepository: SettingsRepository,
+    private val rootfsRepository: RootfsRepository,
 ) : ViewModel() {
 
     private val localState = MutableStateFlow(HomeUiState())
 
     val uiState: StateFlow<HomeUiState> = combine(
         settingsRepository.rootfsState,
+        DesktopSession.state,
         localState,
-    ) { rootfs, local ->
+    ) { rootfs, desktop, local ->
         local.copy(
             desktopState = when {
                 rootfs.isImporting -> DesktopState.IMPORTING
-                rootfs.isInstalled -> {
-                    if (local.desktopState == DesktopState.STOPPED) DesktopState.STOPPED
-                    else DesktopState.RUNNING
-                }
-                else -> DesktopState.NO_ROOTFS
+                !rootfs.isInstalled -> DesktopState.NO_ROOTFS
+                else -> desktop
             },
             importProgress = rootfs.importProgress,
             distroName = rootfs.distroName,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())
 
-    fun onImportRootfsRequested() {
-        // Phase 2: wire to SAF file picker via Activity result
-        viewModelScope.launch {
-            localState.update {
-                it.copy(
-                    messages = it.messages + AgentMessage(
-                        id = UUID.randomUUID().toString(),
-                        role = MessageRole.SYSTEM,
-                        content = "Rootfs import: use Settings or tap Import to select a .tar.gz file. " +
-                            "See rootfs-setup/README.md for build instructions.",
-                    ),
-                )
-            }
-        }
-    }
-
     fun onPowerOff() {
-        localState.update { it.copy(desktopState = DesktopState.STOPPED) }
+        rootfsRepository.stopDesktopService()
+        DesktopSession.setState(DesktopState.STOPPED)
     }
 
     fun onReboot() {
-        localState.update { it.copy(desktopState = DesktopState.STARTING) }
-        // Phase 2: restart ProotDesktopService
+        rootfsRepository.rebootDesktopService()
     }
 
     fun onScreenshot() {
@@ -87,7 +71,7 @@ class HomeViewModel(
                     messages = it.messages + AgentMessage(
                         id = UUID.randomUUID().toString(),
                         role = MessageRole.SYSTEM,
-                        content = "Screenshot saved to: ${path.absolutePath} (Phase 2: X11 capture)",
+                        content = "Screenshot: ${path.absolutePath} (X11 framebuffer capture in Phase 2 polish)",
                     ),
                 )
             }
@@ -203,10 +187,13 @@ class HomeViewModel(
     }
 
     companion object {
-        fun factory(settingsRepository: SettingsRepository) = object : ViewModelProvider.Factory {
+        fun factory(
+            settingsRepository: SettingsRepository,
+            rootfsRepository: RootfsRepository,
+        ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return HomeViewModel(settingsRepository) as T
+                return HomeViewModel(settingsRepository, rootfsRepository) as T
             }
         }
     }

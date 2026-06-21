@@ -3,7 +3,9 @@ package com.proot.cowork.data.prefs
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -23,7 +25,7 @@ data class RootfsState(
     val isInstalled: Boolean = false,
     val isImporting: Boolean = false,
     val importProgress: Float = 0f,
-    val distroName: String = "",
+    val distroName: String = "ubuntu",
 )
 
 class SettingsRepository(private val context: Context) {
@@ -44,8 +46,10 @@ class SettingsRepository(private val context: Context) {
         val BASE_URL = stringPreferencesKey("base_url")
         val MODEL = stringPreferencesKey("model")
         val API_KEY = "api_key"
-        val ROOTFS_INSTALLED = stringPreferencesKey("rootfs_installed")
+        val ROOTFS_INSTALLED = booleanPreferencesKey("rootfs_installed")
         val ROOTFS_NAME = stringPreferencesKey("rootfs_name")
+        val IMPORTING = booleanPreferencesKey("rootfs_importing")
+        val IMPORT_PROGRESS = floatPreferencesKey("rootfs_import_progress")
     }
 
     val llmConfig: Flow<LlmConfig> = context.dataStore.data.map { prefs ->
@@ -58,8 +62,10 @@ class SettingsRepository(private val context: Context) {
 
     val rootfsState: Flow<RootfsState> = context.dataStore.data.map { prefs ->
         RootfsState(
-            isInstalled = prefs[Keys.ROOTFS_INSTALLED] == "true",
-            distroName = prefs[Keys.ROOTFS_NAME] ?: "",
+            isInstalled = prefs[Keys.ROOTFS_INSTALLED] == true,
+            isImporting = prefs[Keys.IMPORTING] == true,
+            importProgress = prefs[Keys.IMPORT_PROGRESS] ?: 0f,
+            distroName = prefs[Keys.ROOTFS_NAME] ?: "ubuntu",
         )
     }
 
@@ -71,10 +77,27 @@ class SettingsRepository(private val context: Context) {
         securePrefs.edit().putString(Keys.API_KEY, apiKey).apply()
     }
 
+    suspend fun setImporting(importing: Boolean, progress: Float = 0f) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.IMPORTING] = importing
+            prefs[Keys.IMPORT_PROGRESS] = progress
+        }
+    }
+
     suspend fun setRootfsInstalled(name: String) {
         context.dataStore.edit { prefs ->
-            prefs[Keys.ROOTFS_INSTALLED] = "true"
+            prefs[Keys.ROOTFS_INSTALLED] = true
             prefs[Keys.ROOTFS_NAME] = name
+            prefs[Keys.IMPORTING] = false
+            prefs[Keys.IMPORT_PROGRESS] = 1f
+        }
+    }
+
+    suspend fun clearRootfsInstalled() {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.ROOTFS_INSTALLED] = false
+            prefs[Keys.IMPORTING] = false
+            prefs[Keys.IMPORT_PROGRESS] = 0f
         }
     }
 
@@ -82,5 +105,5 @@ class SettingsRepository(private val context: Context) {
 
     fun getSkillsDir() = context.filesDir.resolve("skills")
 
-    fun getArtifactsDir() = context.filesDir.resolve("artifacts")
+    fun getArtifactsDir() = context.filesDir.resolve("artifacts").also { it.mkdirs() }
 }

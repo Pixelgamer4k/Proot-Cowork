@@ -180,12 +180,12 @@ UI: show results + artifact links + desktop screenshot
 - [ ] GitHub Actions debug APK build
 - [ ] Rootfs import UI (file picker + extract)
 
-### Phase 2 — Proot Desktop
-- [ ] Bundle proot binary (arm64-v8a)
-- [ ] Embed termux-x11 or SurfaceView stub
-- [ ] ProotService lifecycle (start/stop/reboot)
-- [ ] `rootfs-setup/` scripts for user to build custom rootfs
-- [ ] Screenshot capture
+### Phase 2 — Proot Desktop (current)
+- [x] Bundle proot binary (arm64-v8a) + libs in assets
+- [x] Embed termux-x11 as library module (LorieView)
+- [x] ProotService lifecycle (start/stop/reboot)
+- [x] Rootfs import UI (SAF file picker + tar.gz extract)
+- [ ] Screenshot capture (Phase 2 polish)
 
 ### Phase 3 — Agent Core
 - [ ] Koog integration with OpenAI-compatible API

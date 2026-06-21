@@ -22,3 +22,6 @@ Thumbs.db
 # Rootfs (large, user-provided)
 *.tar.gz
 files/rootfs/
+
+# Vendored native deps (fetched in CI)
+third_party/termux-x11/

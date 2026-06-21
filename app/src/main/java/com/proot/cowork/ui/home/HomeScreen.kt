@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.proot.cowork.R
 import com.proot.cowork.data.prefs.SettingsRepository
+import com.proot.cowork.data.rootfs.RootfsRepository
 import com.proot.cowork.ui.agent.AgentPanel
 import com.proot.cowork.ui.desktop.DesktopPanel
 
@@ -27,9 +28,11 @@ import com.proot.cowork.ui.desktop.DesktopPanel
 @Composable
 fun HomeScreen(
     settingsRepository: SettingsRepository,
+    rootfsRepository: RootfsRepository,
+    onImportRootfs: () -> Unit,
     onNavigateToSettings: () -> Unit,
     viewModel: HomeViewModel = viewModel(
-        factory = HomeViewModel.factory(settingsRepository),
+        factory = HomeViewModel.factory(settingsRepository, rootfsRepository),
     ),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -55,7 +58,7 @@ fun HomeScreen(
                 desktopState = uiState.desktopState,
                 importProgress = uiState.importProgress,
                 distroName = uiState.distroName,
-                onImportRootfs = viewModel::onImportRootfsRequested,
+                onImportRootfs = onImportRootfs,
                 onPowerOff = viewModel::onPowerOff,
                 onReboot = viewModel::onReboot,
                 onScreenshot = viewModel::onScreenshot,

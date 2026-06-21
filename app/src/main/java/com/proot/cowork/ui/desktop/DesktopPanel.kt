@@ -170,19 +170,11 @@ private fun StartingContent() {
 
 @Composable
 private fun RunningDesktopContent() {
-    // Phase 2: replace with termux-x11 SurfaceView
-    Box(
+    X11DesktopView(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = stringResource(R.string.desktop_placeholder),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium,
-        )
-    }
+    )
 }
 
 @Composable

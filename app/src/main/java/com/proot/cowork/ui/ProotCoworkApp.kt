@@ -7,6 +7,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.proot.cowork.data.prefs.SettingsRepository
+import com.proot.cowork.data.rootfs.RootfsRepository
 import com.proot.cowork.ui.home.HomeScreen
 import com.proot.cowork.ui.settings.SettingsScreen
 
@@ -16,7 +17,11 @@ object Routes {
 }
 
 @Composable
-fun ProotCoworkApp(settingsRepository: SettingsRepository) {
+fun ProotCoworkApp(
+    settingsRepository: SettingsRepository,
+    rootfsRepository: RootfsRepository,
+    onImportRootfs: () -> Unit,
+) {
     val navController = rememberNavController()
 
     NavHost(
@@ -27,6 +32,8 @@ fun ProotCoworkApp(settingsRepository: SettingsRepository) {
         composable(Routes.HOME) {
             HomeScreen(
                 settingsRepository = settingsRepository,
+                rootfsRepository = rootfsRepository,
+                onImportRootfs = onImportRootfs,
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
             )
         }

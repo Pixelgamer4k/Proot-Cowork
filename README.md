@@ -6,8 +6,8 @@ Android-native AI cowork agent with embedded proot Linux desktop. Inspired by Ki
 
 | Phase | Status | Features |
 |-------|--------|----------|
-| 1 | ✅ Current | Compose UI shell, 16:9 desktop placeholder, settings, agent chat UI |
-| 2 | Planned | Proot + X11 desktop, rootfs import, power controls |
+| 1 | ✅ Done | Compose UI shell, 16:9 desktop placeholder, settings, agent chat UI |
+| 2 | ✅ Current | Proot + X11 desktop, rootfs import, power controls |
 | 3 | Planned | Koog agent, OpenAI-compatible API, plan/direct modes |
 | 4 | Planned | Agent swarm, skills (SKILL.md), self-improvement |
 | 5 | Planned | Schedule mode, file browser, external terminal |
