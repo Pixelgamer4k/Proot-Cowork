@@ -1,4 +1,4 @@
-package com.proot.cowork.x11
+package com.termux.x11
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -8,9 +8,6 @@ import android.os.Build
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.util.Log
-import com.termux.x11.CmdEntryPoint
-import com.termux.x11.ICmdEntryInterface
-import com.termux.x11.LorieView
 
 object X11ServerManager {
 
@@ -36,7 +33,6 @@ object X11ServerManager {
             }
         }, "x11-server").also { it.start() }
 
-        // Give the server a moment to publish its binder.
         Thread.sleep(500)
     }
 

@@ -15,7 +15,13 @@ Android-native AI cowork agent with embedded proot Linux desktop. Inspired by Ki
 
 ## Build
 
-Debug APKs are built via GitHub Actions on every push to `main`:
+Debug APKs are built via GitHub Actions on every push to `main`. Phase 2 embeds **termux-x11** (native X11 server) — first CI build may take ~30–60 minutes.
+
+```bash
+# Local build (requires Android SDK + NDK)
+bash scripts/setup-x11-module.sh
+./gradlew assembleDebug
+```
 
 ```bash
 # Trigger manually
@@ -34,10 +40,10 @@ Local build (requires Android SDK):
 
 ## Configuration
 
-1. Open app → Settings (gear icon)
-2. Set API Base URL (e.g. `https://openrouter.ai/api/v1`)
-3. Set API Key and Model (e.g. `openrouter/owl-alpha`)
-4. Import rootfs (see [rootfs-setup/README.md](rootfs-setup/README.md))
+1. Install the debug APK on your **ARM64** Android device
+2. Open app → tap **Add your rootfs** → select `proot-cowork-rootfs.tar.gz`
+3. Wait for import + auto-start (X11 + proot desktop in the top panel)
+4. Open **Settings** (gear) → set API URL, key, and model for Phase 3 agents
 
 ## Architecture
 

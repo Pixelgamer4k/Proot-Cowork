@@ -14,7 +14,7 @@ import com.proot.cowork.data.proot.ProotCommandBuilder
 import com.proot.cowork.data.proot.RuntimeBootstrap
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
-import com.proot.cowork.x11.X11ServerManager
+import com.termux.x11.X11ServerManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

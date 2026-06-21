@@ -8,7 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import com.termux.x11.LorieView
-import com.proot.cowork.x11.X11ServerManager
+import com.termux.x11.X11ServerManager
 import kotlinx.coroutines.delay
 
 @Composable
