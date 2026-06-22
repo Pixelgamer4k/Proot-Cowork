@@ -15,7 +15,7 @@ import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.proot.ProotCommandBuilder
 import com.proot.cowork.data.proot.RuntimeBootstrap
 import com.proot.cowork.data.rootfs.RootfsValidator
-import com.proot.cowork.data.vnc.VncPortProbe
+import com.proot.cowork.data.vnc.VncReadiness
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
 import com.proot.cowork.domain.vnc.VncSession
@@ -24,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -81,6 +82,7 @@ class ProotDesktopService : Service() {
         updateNotification("Starting Linux desktop…")
 
         scope.launch {
+            val logLines = Channel<String>(capacity = Channel.UNLIMITED)
             try {
                 val runtime = RuntimeBootstrap(applicationContext).ensureRuntime()
                 val command = ProotCommandBuilder.buildStartDesktop(
@@ -93,16 +95,23 @@ class ProotDesktopService : Service() {
                 val env = ProotCommandBuilder.guestEnvironment(applicationContext, runtime)
 
                 val process = ProcessBuilder(command)
-                    .directory(rootfs)
+                    .directory(applicationContext.filesDir)
                     .redirectErrorStream(true)
-                    .apply { environment().putAll(env) }
+                    .apply {
+                        environment().clear()
+                        environment().putAll(env)
+                    }
                     .start()
 
                 prootProcess = process
-                logJob = launch { streamLogs(process) }
+                logJob = launch {
+                    streamLogs(process, logLines)
+                }
 
                 updateNotification("Waiting for VNC…")
-                if (!VncPortProbe.waitUntilOpen()) {
+                val ready = VncReadiness.awaitReady(logLines = logLines)
+
+                if (!ready) {
                     DesktopSession.appendLog("Timed out waiting for VNC on 127.0.0.1:5900")
                     DesktopSession.setState(DesktopState.STOPPED)
                     process.destroy()
@@ -120,6 +129,7 @@ class ProotDesktopService : Service() {
                 DesktopSession.appendLog("Error: ${e.message}")
                 DesktopSession.setState(DesktopState.STOPPED)
             } finally {
+                logLines.close()
                 if (prootProcess?.isAlive != true) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
@@ -128,13 +138,15 @@ class ProotDesktopService : Service() {
         }
     }
 
-    private suspend fun streamLogs(process: Process) {
+    private suspend fun streamLogs(process: Process, logLines: kotlinx.coroutines.channels.Channel<String>) {
         BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
             var line = reader.readLine()
             while (line != null) {
                 DesktopSession.appendLog(line)
+                logLines.trySend(line)
                 line = reader.readLine()
             }
+            logLines.close()
         }
     }
 

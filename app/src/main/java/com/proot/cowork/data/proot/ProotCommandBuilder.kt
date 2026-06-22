@@ -16,6 +16,7 @@ object ProotCommandBuilder {
         put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
         put("TERM", "xterm-256color")
         put("TMPDIR", "/tmp")
+        put("XDG_RUNTIME_DIR", "/tmp")
         put("VNC_PORT", "5900")
         put("LD_LIBRARY_PATH", runtime.ldLibraryPath)
         put("PROOT_TMP_DIR", runtime.tmpDir.absolutePath)
