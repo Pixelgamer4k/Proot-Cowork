@@ -48,8 +48,13 @@ object X11ServerManager {
             start()
         }
 
-        Thread.sleep(800)
-        return !startFailed
+        val deadline = System.currentTimeMillis() + 5000
+        while (System.currentTimeMillis() < deadline) {
+            if (startFailed) return false
+            if (service != null) return true
+            Thread.sleep(100)
+        }
+        return service != null && !startFailed
     }
 
     @Synchronized

@@ -17,4 +17,6 @@ fi
 echo "==> Patching termux-x11 app module as Android library..."
 cp "$ROOT/scripts/termux-x11-library.build.gradle" "$X11_DIR/app/build.gradle"
 
+bash "$ROOT/scripts/patch-termux-x11-embed.sh"
+
 echo "==> termux-x11 ready"

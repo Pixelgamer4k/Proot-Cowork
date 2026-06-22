@@ -42,6 +42,7 @@ fun DesktopPanel(
     desktopState: DesktopState,
     importProgress: Float,
     distroName: String,
+    desktopLogHint: String? = null,
     onImportRootfs: () -> Unit,
     onPowerOff: () -> Unit,
     onReboot: () -> Unit,
@@ -96,7 +97,7 @@ fun DesktopPanel(
                 DesktopState.IMPORTING -> ImportingContent(importProgress)
                 DesktopState.STARTING -> StartingContent()
                 DesktopState.RUNNING -> RunningDesktopContent()
-                DesktopState.STOPPED -> StoppedContent(onReboot)
+                DesktopState.STOPPED -> StoppedContent(onReboot, desktopLogHint)
             }
         }
     }
@@ -178,9 +179,21 @@ private fun RunningDesktopContent() {
 }
 
 @Composable
-private fun StoppedContent(onReboot: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun StoppedContent(onReboot: () -> Unit, errorHint: String?) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(horizontal = 16.dp),
+    ) {
         Text("Desktop powered off", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!errorHint.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                errorHint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
+            )
+        }
         Spacer(modifier = Modifier.height(12.dp))
         FilledTonalButton(onClick = onReboot) {
             Text(stringResource(R.string.reboot))

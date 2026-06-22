@@ -58,6 +58,7 @@ fun HomeScreen(
                 desktopState = uiState.desktopState,
                 importProgress = uiState.importProgress,
                 distroName = uiState.distroName,
+                desktopLogHint = uiState.desktopLogHint,
                 onImportRootfs = onImportRootfs,
                 onPowerOff = viewModel::onPowerOff,
                 onReboot = viewModel::onReboot,

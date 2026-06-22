@@ -24,6 +24,7 @@ data class HomeUiState(
     val desktopState: DesktopState = DesktopState.NO_ROOTFS,
     val importProgress: Float = 0f,
     val distroName: String = "",
+    val desktopLogHint: String? = null,
     val messages: List<AgentMessage> = emptyList(),
     val swarmTasks: List<SwarmTask> = emptyList(),
     val executionMode: ExecutionMode = ExecutionMode.PLAN,
@@ -41,8 +42,9 @@ class HomeViewModel(
     val uiState: StateFlow<HomeUiState> = combine(
         settingsRepository.rootfsState,
         DesktopSession.state,
+        DesktopSession.logLines,
         localState,
-    ) { rootfs, desktop, local ->
+    ) { rootfs, desktop, logs, local ->
         local.copy(
             desktopState = when {
                 rootfs.isImporting -> DesktopState.IMPORTING
@@ -51,6 +53,7 @@ class HomeViewModel(
             },
             importProgress = rootfs.importProgress,
             distroName = rootfs.distroName,
+            desktopLogHint = logs.lastOrNull(),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())
 
