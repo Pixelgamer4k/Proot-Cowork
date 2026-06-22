@@ -71,7 +71,7 @@ object ProotCommandBuilder {
         prootArgs += "-w"
         prootArgs += "/root"
         prootArgs += "-0"
-        prootArgs += "LD_LIBRARY_PATH=${runtime.libraryPath.absolutePath}"
+        prootArgs += "LD_LIBRARY_PATH=${runtime.ldLibraryPath}"
         prootArgs += "-0"
         prootArgs += "HOME=/home/cowork"
         prootArgs += "/bin/bash"
