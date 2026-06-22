@@ -22,6 +22,7 @@ fun X11DesktopView(
     AndroidView(
         modifier = modifier,
         factory = { context ->
+            EmbeddedX11.ensurePrefs(context)
             LorieView(context).apply {
                 layoutParams = ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
