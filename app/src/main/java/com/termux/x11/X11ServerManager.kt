@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.system.Os
 import android.util.Log
 
 object X11ServerManager {
@@ -28,6 +29,21 @@ object X11ServerManager {
         val appContext = context.applicationContext
         registerReceiver(appContext)
         startFailed = false
+
+        try {
+            System.loadLibrary("Xlorie")
+        } catch (e: UnsatisfiedLinkError) {
+            startFailed = true
+            Log.e(TAG, "Failed to load libXlorie", e)
+            return false
+        }
+
+        try {
+            Os.setenv("TERMUX_X11_OVERRIDE_PACKAGE", appContext.packageName, true)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not set TERMUX_X11_OVERRIDE_PACKAGE env", e)
+        }
+        System.setProperty("TERMUX_X11_OVERRIDE_PACKAGE", appContext.packageName)
 
         serverThread = Thread({
             try {

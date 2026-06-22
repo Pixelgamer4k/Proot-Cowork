@@ -16,8 +16,11 @@ from pathlib import Path
 
 path = Path(sys.argv[1])
 text = path.read_text()
+changed = False
 
-old = '''        String path = "lib/" + Build.SUPPORTED_ABIS[0] + "/libXlorie.so";
+replacements = [
+    (
+        '''        String path = "lib/" + Build.SUPPORTED_ABIS[0] + "/libXlorie.so";
         ClassLoader loader = CmdEntryPoint.class.getClassLoader();
         URL res = loader != null ? loader.getResource(path) : null;
         String libPath = res != null ? res.getFile().replace("file:", "") : null;
@@ -35,9 +38,15 @@ old = '''        String path = "lib/" + Build.SUPPORTED_ABIS[0] + "/libXlorie.so
                 System.err.println("Failed to acquire native library. Did you install the right apk? Try the universal one.");
                 System.exit(134);
             }
-        }'''
-
-new = '''        try {
+        }''',
+        '''        try {
+            System.loadLibrary("Xlorie");
+        } catch (UnsatisfiedLinkError e) {
+            Log.e("CmdEntryPoint", "Failed to load libXlorie", e);
+        }''',
+    ),
+    (
+        '''        try {
             System.loadLibrary("Xlorie");
         } catch (UnsatisfiedLinkError e) {
             Log.e("CmdEntryPoint", "Failed to load libXlorie", e);
@@ -45,14 +54,58 @@ new = '''        try {
                 System.err.println("Failed to load native library.");
                 System.exit(134);
             }
-        }'''
+        }''',
+        '''        try {
+            System.loadLibrary("Xlorie");
+        } catch (UnsatisfiedLinkError e) {
+            Log.e("CmdEntryPoint", "Failed to load libXlorie", e);
+        }''',
+    ),
+    (
+        '''    CmdEntryPoint(String[] args) {
+        if (!start(args))
+            System.exit(1);
 
-if old in text:
-    path.write_text(text.replace(old, new))
-    print("Patched CmdEntryPoint native library loading")
-elif 'System.loadLibrary("Xlorie")' in text:
-    print("CmdEntryPoint already patched")
-else:
-    print("CmdEntryPoint patch target not found", file=sys.stderr)
+        spawnListeningThread();
+        sendBroadcastDelayed();
+    }''',
+        '''    CmdEntryPoint(String[] args) {
+        if (!start(args)) {
+            Log.e("CmdEntryPoint", "native start() failed");
+            if (getenv("TERMUX_X11_OVERRIDE_PACKAGE") == null
+                    && System.getProperty("TERMUX_X11_OVERRIDE_PACKAGE") == null) {
+                System.exit(1);
+            }
+            return;
+        }
+
+        spawnListeningThread();
+        sendBroadcastDelayed();
+    }''',
+    ),
+    (
+        '''        String targetPackage = getenv("TERMUX_X11_OVERRIDE_PACKAGE");
+        if (targetPackage == null)
+            targetPackage = "com.termux.x11";''',
+        '''        String targetPackage = getenv("TERMUX_X11_OVERRIDE_PACKAGE");
+        if (targetPackage == null)
+            targetPackage = System.getProperty("TERMUX_X11_OVERRIDE_PACKAGE");
+        if (targetPackage == null)
+            targetPackage = "com.termux.x11";''',
+    ),
+]
+
+for old, new in replacements:
+    if old in text:
+        text = text.replace(old, new)
+        changed = True
+
+if not changed and 'System.getProperty("TERMUX_X11_OVERRIDE_PACKAGE")' in text:
+    print("CmdEntryPoint already fully patched")
+elif not changed:
+    print("CmdEntryPoint patch targets not found", file=sys.stderr)
     sys.exit(1)
+else:
+    path.write_text(text)
+    print("Patched CmdEntryPoint for embedded mode")
 PY
