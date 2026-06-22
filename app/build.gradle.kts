@@ -4,8 +4,6 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-import com.android.build.api.variant.ApplicationAndroidComponentsExtension
-
 android {
     namespace = "com.proot.cowork"
     compileSdk = 35
@@ -61,9 +59,9 @@ android {
     }
 }
 
-extensions.configure<ApplicationAndroidComponentsExtension> {
-    onVariants(selector().withBuildType("debug")) { variant ->
-        variant.targetSdk.set(28)
+androidComponents {
+    beforeVariants(selector().withBuildType("debug")) { variantBuilder ->
+        variantBuilder.targetSdk = 28
     }
 }
 
