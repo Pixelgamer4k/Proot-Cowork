@@ -18,6 +18,7 @@ class RuntimeBootstrap(private val context: Context) {
 
         val supportLibDir = File(context.filesDir, "exec_libs").also { it.mkdirs() }
         ensureVersionedTalloc(nativeLibDir, supportLibDir)
+        val loaderDir = ensureProotLoaders(nativeLibDir, supportLibDir)
 
         val ldLibraryPath = listOf(nativeLibDir, supportLibDir)
             .joinToString(":") { it.absolutePath }
@@ -26,8 +27,41 @@ class RuntimeBootstrap(private val context: Context) {
             prootBinary = prootBin,
             ldLibraryPath = ldLibraryPath,
             tmpDir = File(context.filesDir, "tmp").also { it.mkdirs() },
+            loaderPath = File(loaderDir, LOADER_NAME),
+            loader32Path = File(loaderDir, LOADER32_NAME),
             useLinker64 = is64BitAbi(),
         )
+    }
+
+    /**
+     * Termux proot requires companion loader binaries beside the main proot executable.
+     * Without PROOT_LOADER set, guest ELF exec fails with Permission denied on Android.
+     */
+    private fun ensureProotLoaders(nativeLibDir: File, supportLibDir: File): File {
+        val loaderDir = File(supportLibDir, "proot").also { it.mkdirs() }
+        val loader = File(loaderDir, LOADER_NAME)
+        val loader32 = File(loaderDir, LOADER32_NAME)
+
+        if (loader.isFile && loader32.isFile && loader.length() > 0L) {
+            return loaderDir
+        }
+
+        val sources = listOf(
+            File(nativeLibDir, LOADER_JNI_NAME) to loader,
+            File(nativeLibDir, LOADER32_JNI_NAME) to loader32,
+        )
+        for ((source, dest) in sources) {
+            if (!source.isFile) {
+                throw IllegalStateException(
+                    "Missing ${source.name} in nativeLibraryDir. " +
+                        "Run scripts/fetch-proot-runtime.sh and rebuild.",
+                )
+            }
+            source.copyTo(dest, overwrite = true)
+            dest.setReadable(true, false)
+            dest.setExecutable(true, false)
+        }
+        return loaderDir
     }
 
     /**
@@ -56,6 +90,10 @@ class RuntimeBootstrap(private val context: Context) {
 
     companion object {
         const val PROOT_LIB_NAME = "libproot_exec.so"
+        const val LOADER_JNI_NAME = "libproot_loader.so"
+        const val LOADER32_JNI_NAME = "libproot_loader32.so"
+        private const val LOADER_NAME = "loader"
+        private const val LOADER32_NAME = "loader32"
     }
 }
 
@@ -63,6 +101,8 @@ data class ProotRuntime(
     val prootBinary: File,
     val ldLibraryPath: String,
     val tmpDir: File,
+    val loaderPath: File,
+    val loader32Path: File,
     val useLinker64: Boolean,
 ) {
     fun launchCommand(prootArgs: List<String>): List<String> {

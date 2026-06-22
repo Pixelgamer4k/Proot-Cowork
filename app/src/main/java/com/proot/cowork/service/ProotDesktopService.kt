@@ -84,9 +84,9 @@ class ProotDesktopService : Service() {
                 )
                 DesktopSession.appendLog("Starting proot: ${command.joinToString(" ")}")
 
-                val env = hashMapOf<String, String>()
-                env.putAll(System.getenv().filterValues { it != null }.mapValues { it.value!! })
-                env.putAll(ProotCommandBuilder.guestEnvironment(applicationContext, runtime))
+                // Use a clean guest environment. Merging Android's host env (especially
+                // LD_PRELOAD) breaks proot guest execution on Android.
+                val env = ProotCommandBuilder.guestEnvironment(applicationContext, runtime)
 
                 val process = ProcessBuilder(command)
                     .directory(rootfs)

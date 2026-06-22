@@ -1,6 +1,7 @@
 package com.proot.cowork.data.proot
 
 import android.content.Context
+import android.os.Build
 import java.io.File
 
 object ProotCommandBuilder {
@@ -8,15 +9,21 @@ object ProotCommandBuilder {
     fun guestEnvironment(
         context: Context,
         runtime: ProotRuntime,
-    ): Map<String, String> = mapOf(
-        "DISPLAY" to ":0",
-        "XDG_RUNTIME_DIR" to "/tmp",
-        "HOME" to "/home/cowork",
-        "USER" to "cowork",
-        "TMPDIR" to "/tmp",
-        "LD_LIBRARY_PATH" to runtime.ldLibraryPath,
-        "PROOT_TMP_DIR" to runtime.tmpDir.absolutePath,
-    )
+    ): Map<String, String> = buildMap {
+        put("HOME", "/home/cowork")
+        put("USER", "cowork")
+        put("LANG", "C.UTF-8")
+        put("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+        put("TERM", "xterm-256color")
+        put("TMPDIR", "/tmp")
+        put("DISPLAY", ":0")
+        put("XDG_RUNTIME_DIR", "/tmp")
+        put("LD_LIBRARY_PATH", runtime.ldLibraryPath)
+        put("PROOT_TMP_DIR", runtime.tmpDir.absolutePath)
+        put("PROOT_LOADER", runtime.loaderPath.absolutePath)
+        put("PROOT_LOADER_32", runtime.loader32Path.absolutePath)
+        put("PROOT_NO_SECCOMP", "1")
+    }
 
     fun buildStartDesktop(
         context: Context,
@@ -25,25 +32,26 @@ object ProotCommandBuilder {
     ): List<String> {
         val tmp = runtime.tmpDir
         File(tmp, ".X11-unix").mkdirs()
+        tmp.setReadable(true, false)
+        tmp.setWritable(true, false)
+        tmp.setExecutable(true, false)
 
-        val bindings = listOf(
-            "/dev:/dev",
-            "/proc:/proc",
-            "/sys:/sys",
-            "${tmp.absolutePath}:/tmp",
-            "${context.filesDir.absolutePath}/artifacts:/artifacts",
-            "${context.getExternalFilesDir(null)?.absolutePath ?: context.filesDir.absolutePath}/storage:/storage",
-        )
+        val sysdataDir = File(context.filesDir, "sysdata")
+        ProotSysdata.ensure(sysdataDir)
+
+        val bindings = buildAndroidBindings(context, runtime, rootfsDir, tmp, sysdataDir)
 
         val prootArgs = mutableListOf<String>()
+        appendProotExtensions(prootArgs)
+        prootArgs += "-i"
+        prootArgs += "0:0"
         prootArgs += "-r"
         prootArgs += rootfsDir.absolutePath
+        prootArgs += "--cwd=/"
         bindings.forEach { bind ->
             prootArgs += "-b"
             prootArgs += bind
         }
-        prootArgs += "-w"
-        prootArgs += "/"
         prootArgs += "/usr/bin/bash"
         prootArgs += "/start-desktop.sh"
         return runtime.launchCommand(prootArgs)
@@ -55,24 +63,88 @@ object ProotCommandBuilder {
         command: String,
     ): List<String> {
         val tmp = runtime.tmpDir
-        val bindings = listOf(
-            "/dev:/dev",
-            "/proc:/proc",
-            "/sys:/sys",
-            "${tmp.absolutePath}:/tmp",
+        val sysdataDir = File(tmp.parentFile, "sysdata")
+        ProotSysdata.ensure(sysdataDir)
+
+        val bindings = buildAndroidBindings(
+            context = null,
+            runtime = runtime,
+            rootfsDir = rootfsDir,
+            tmpDir = tmp,
+            sysdataDir = sysdataDir,
         )
+
         val prootArgs = mutableListOf<String>()
+        appendProotExtensions(prootArgs)
+        prootArgs += "-i"
+        prootArgs += "0:0"
         prootArgs += "-r"
         prootArgs += rootfsDir.absolutePath
+        prootArgs += "--cwd=/root"
         bindings.forEach { bind ->
             prootArgs += "-b"
             prootArgs += bind
         }
-        prootArgs += "-w"
-        prootArgs += "/root"
         prootArgs += "/usr/bin/bash"
         prootArgs += "-lc"
         prootArgs += command
         return runtime.launchCommand(prootArgs)
+    }
+
+    private fun appendProotExtensions(args: MutableList<String>) {
+        args += "--kill-on-exit"
+        args += "--link2symlink"
+        args += "--sysvipc"
+        args += "-L"
+        args += "--kernel-release"
+        args += ProotSysdata.kernelReleaseArg(
+            hostname = Build.MODEL.ifBlank { "cowork" },
+            machine = Build.SUPPORTED_ABIS.firstOrNull()?.replace("-", "_") ?: "aarch64",
+        )
+    }
+
+    private fun buildAndroidBindings(
+        context: Context?,
+        runtime: ProotRuntime,
+        rootfsDir: File,
+        tmpDir: File,
+        sysdataDir: File,
+    ): List<String> {
+        val bindings = mutableListOf(
+            "/dev",
+            "/proc",
+            "/sys",
+            "/dev/urandom:/dev/random",
+            "/proc/self/fd:/dev/fd",
+            "${tmpDir.absolutePath}:/tmp",
+            "${tmpDir.absolutePath}/.X11-unix:/tmp/.X11-unix",
+            "${tmpDir.absolutePath}:/dev/shm",
+            "${File(sysdataDir, "sys_empty").absolutePath}:/sys/fs/selinux",
+        )
+
+        for (fd in 0..2) {
+            val hostFd = "/proc/self/fd/$fd"
+            if (File(hostFd).exists()) {
+                bindings += "$hostFd:/dev/${arrayOf("stdin", "stdout", "stderr")[fd]}"
+            }
+        }
+
+        if (File("/apex").isDirectory) {
+            bindings += "/apex:/apex"
+        }
+
+        ProotSysdata.fakeProcBindArgs(sysdataDir).forEach { bindings += it }
+
+        context?.let {
+            val artifacts = File(it.filesDir, "artifacts")
+            artifacts.mkdirs()
+            bindings += "${artifacts.absolutePath}:/artifacts"
+
+            it.getExternalFilesDir(null)?.let { ext ->
+                bindings += "${ext.absolutePath}:/storage"
+            }
+        }
+
+        return bindings
     }
 }

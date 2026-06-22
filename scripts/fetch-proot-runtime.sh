@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ASSETS="$ROOT/app/src/main/assets/runtime/aarch64"
 JNILIBS="$ROOT/app/src/main/jniLibs/arm64-v8a"
 
-if [[ -f "$JNILIBS/libproot_exec.so" && -f "$JNILIBS/libtalloc.so.2" ]]; then
+if [[ -f "$JNILIBS/libproot_exec.so" && -f "$JNILIBS/libtalloc.so.2" && -f "$JNILIBS/libproot_loader.so" ]]; then
   echo "==> proot runtime already present in jniLibs"
   exit 0
 fi
@@ -23,6 +23,8 @@ dpkg-deb -x "$tmpdir/libtalloc.deb" "$tmpdir/le"
 dpkg-deb -x "$tmpdir/libshmem.deb" "$tmpdir/se"
 
 proot_src="$tmpdir/pe/data/data/com.termux/files/usr/bin/proot"
+loader_src="$tmpdir/pe/data/data/com.termux/files/usr/libexec/proot/loader"
+loader32_src="$tmpdir/pe/data/data/com.termux/files/usr/libexec/proot/loader32"
 talloc_src="$tmpdir/le/data/data/com.termux/files/usr/lib/libtalloc.so.2.4.3"
 shmem_src="$tmpdir/se/data/data/com.termux/files/usr/lib/libandroid-shmem.so"
 
@@ -34,6 +36,8 @@ cp "$shmem_src" "$ASSETS/lib/"
 
 # Android 10+ W^X: execute from nativeLibraryDir via linker64.
 cp "$proot_src" "$JNILIBS/libproot_exec.so"
+cp "$loader_src" "$JNILIBS/libproot_loader.so"
+cp "$loader32_src" "$JNILIBS/libproot_loader32.so"
 cp "$talloc_src" "$JNILIBS/libtalloc.so"
 cp "$talloc_src" "$JNILIBS/libtalloc.so.2"
 cp "$shmem_src" "$JNILIBS/libandroid-shmem.so"

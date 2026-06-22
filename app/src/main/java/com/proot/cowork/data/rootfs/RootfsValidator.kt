@@ -14,7 +14,14 @@ object RootfsValidator {
             startScript.setExecutable(true, false)
         }
         if (!startScript.canExecute()) return false
-        return File(rootfsDir, "usr/bin/bash").isFile
+
+        val bash = File(rootfsDir, "usr/bin/bash")
+        if (!bash.isFile || bash.length() == 0L) return false
+
+        val binLink = File(rootfsDir, "bin")
+        if (!binLink.exists()) return false
+
+        return true
     }
 
     fun repairLayout(rootfsDir: File) {

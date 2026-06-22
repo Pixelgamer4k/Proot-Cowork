@@ -9,6 +9,7 @@ import com.proot.cowork.service.ProotDesktopService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.nio.file.Files
 
 class RootfsRepository(
     private val context: Context,
@@ -63,10 +64,7 @@ class RootfsRepository(
                     if (rootfsDir.exists()) {
                         rootfsDir.deleteRecursively()
                     }
-                    if (!partialDir.renameTo(rootfsDir)) {
-                        partialDir.copyRecursively(rootfsDir, overwrite = true)
-                        partialDir.deleteRecursively()
-                    }
+                    moveDirectoryPreservingSymlinks(partialDir, rootfsDir)
                     settingsRepository.setRootfsInstalled("ubuntu")
                     DesktopSession.setState(DesktopState.STARTING)
                     startDesktopService()
@@ -103,5 +101,29 @@ class RootfsRepository(
             action = ProotDesktopService.ACTION_REBOOT
         }
         context.startForegroundService(intent)
+    }
+
+    private fun moveDirectoryPreservingSymlinks(source: File, dest: File) {
+        if (source.renameTo(dest)) return
+        copyDirectoryPreservingSymlinks(source, dest)
+        source.deleteRecursively()
+    }
+
+    private fun copyDirectoryPreservingSymlinks(source: File, dest: File) {
+        if (!dest.exists() && !dest.mkdirs()) {
+            throw IllegalStateException("Failed to create $dest")
+        }
+        source.listFiles()?.forEach { entry ->
+            val target = File(dest, entry.name)
+            val path = entry.toPath()
+            when {
+                Files.isSymbolicLink(path) -> {
+                    if (target.exists()) target.delete()
+                    Files.createSymbolicLink(target.toPath(), Files.readSymbolicLink(path))
+                }
+                entry.isDirectory -> copyDirectoryPreservingSymlinks(entry, target)
+                else -> entry.copyTo(target, overwrite = true)
+            }
+        }
     }
 }
