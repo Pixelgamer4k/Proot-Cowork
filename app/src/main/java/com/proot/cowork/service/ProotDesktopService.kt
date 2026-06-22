@@ -16,6 +16,7 @@ import com.proot.cowork.data.proot.ProotCommandBuilder
 import com.proot.cowork.data.proot.RuntimeBootstrap
 import com.proot.cowork.data.rootfs.RootfsValidator
 import com.proot.cowork.data.vnc.VncReadiness
+import com.proot.cowork.debug.DebugStatusWriter
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
 import com.proot.cowork.domain.vnc.VncSession
@@ -79,6 +80,7 @@ class ProotDesktopService : Service() {
 
         DesktopSession.setState(DesktopState.STARTING)
         DesktopSession.clearLogs()
+        DebugStatusWriter.clearProotLog(applicationContext)
         updateNotification("Starting Linux desktop…")
 
         scope.launch {
@@ -91,6 +93,7 @@ class ProotDesktopService : Service() {
                     rootfsDir = rootfs,
                 )
                 DesktopSession.appendLog("Starting proot (VNC desktop)")
+                DebugStatusWriter.writeProotCommand(applicationContext, command)
 
                 val env = ProotCommandBuilder.guestEnvironment(applicationContext, runtime)
 
@@ -112,22 +115,30 @@ class ProotDesktopService : Service() {
                 val ready = VncReadiness.awaitReady(logLines = logLines)
 
                 if (!ready) {
+                    val tail = DesktopSession.logLines.value.takeLast(5).joinToString(" | ")
                     DesktopSession.appendLog("Timed out waiting for VNC on 127.0.0.1:5900")
+                    if (tail.isNotBlank()) {
+                        DesktopSession.appendLog("Last proot output: $tail")
+                    }
                     DesktopSession.setState(DesktopState.STOPPED)
+                    DebugStatusWriter.refresh(applicationContext)
                     process.destroy()
                     return@launch
                 }
 
                 DesktopSession.appendLog("VNC ready on port 5900")
                 DesktopSession.setState(DesktopState.RUNNING)
+                DebugStatusWriter.refresh(applicationContext)
                 updateNotification("Linux desktop running (VNC)")
 
                 val exit = process.waitFor()
                 DesktopSession.appendLog("proot exited with code $exit")
+                DebugStatusWriter.writeProotExit(applicationContext, exit)
                 DesktopSession.setState(DesktopState.STOPPED)
             } catch (e: Exception) {
                 DesktopSession.appendLog("Error: ${e.message}")
                 DesktopSession.setState(DesktopState.STOPPED)
+                DebugStatusWriter.refresh(applicationContext)
             } finally {
                 logLines.close()
                 if (prootProcess?.isAlive != true) {
@@ -143,10 +154,10 @@ class ProotDesktopService : Service() {
             var line = reader.readLine()
             while (line != null) {
                 DesktopSession.appendLog(line)
+                DebugStatusWriter.appendProotLog(applicationContext, line)
                 logLines.trySend(line)
                 line = reader.readLine()
             }
-            logLines.close()
         }
     }
 

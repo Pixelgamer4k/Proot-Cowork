@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.os.Build
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.rootfs.RootfsRepository
+import com.proot.cowork.debug.DebugStatusWriter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,6 +25,7 @@ class ProotCoworkApp : Application() {
         super.onCreate()
         settingsRepository = SettingsRepository(this)
         rootfsRepository = RootfsRepository(this, settingsRepository)
+        DebugStatusWriter.init(this)
         createNotificationChannels()
         appScope.launch {
             rootfsRepository.repairStateOnStartup()

@@ -93,11 +93,10 @@ object ProotCommandBuilder {
         args += "--link2symlink"
         args += "--sysvipc"
         args += "-L"
-        args += "--kernel-release"
-        args += ProotSysdata.kernelReleaseArg(
-            hostname = Build.MODEL.ifBlank { "cowork" },
-            machine = Build.SUPPORTED_ABIS.firstOrNull()?.replace("-", "_") ?: "aarch64",
-        )
+        val hostname = Build.MODEL.ifBlank { "cowork" }
+            .replace(Regex("[^A-Za-z0-9._-]"), "-")
+        val machine = Build.SUPPORTED_ABIS.firstOrNull()?.replace("-", "_") ?: "aarch64"
+        args += "--kernel-release=${ProotSysdata.kernelReleaseArg(hostname, machine)}"
     }
 
     private fun buildAndroidBindings(

@@ -22,6 +22,8 @@ object ProotSysdata {
                 "(gcc (GCC) 13.3.0, GNU ld (GNU Binutils) 2.42) $FAKE_KERNEL_VERSION\n",
         )
         writeIfMissing(File(sysdataDir, "uptime"), "124.08 932.80\n")
+        writeIfMissing(File(sysdataDir, "stat"), "cpu  0 0 0 0 0 0 0 0 0 0\n")
+        writeIfMissing(File(sysdataDir, "vmstat"), "nr_free_pages 0\n")
         writeIfMissing(File(sysdataDir, "sysctl_entry_cap_last_cap"), "40\n")
         writeIfMissing(File(sysdataDir, "sysctl_inotify_max_user_watches"), "4096\n")
         writeIfMissing(File(sysdataDir, "sysctl_kernel_overflowuid"), "65534\n")
