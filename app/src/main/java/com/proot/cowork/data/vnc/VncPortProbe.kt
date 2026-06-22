@@ -20,7 +20,7 @@ object VncPortProbe {
         return isOpen(host, port)
     }
 
-    fun isOpen(host: String, port: Int): Boolean =
+    fun isOpen(host: String = VncConfig.HOST, port: Int = VncConfig.PORT): Boolean =
         runCatching {
             Socket().use { socket ->
                 socket.connect(InetSocketAddress(host, port), VncConfig.CONNECT_TIMEOUT_MS)
