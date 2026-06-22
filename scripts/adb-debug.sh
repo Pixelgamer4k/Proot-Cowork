@@ -44,7 +44,7 @@ case "${1:-help}" in
   ;;
   shell)
     cmd="${2:-echo PROOT_OK}"
-    broadcast RUN_PROOT_SHELL --es command "$cmd"
+    adb shell "am broadcast -a '$ACTION' -n '$RECEIVER' --es cmd RUN_PROOT_SHELL --es command '$cmd'"
     ;;
   result)
     adb shell run-as "$PKG" cat files/debug/last-command-result.txt

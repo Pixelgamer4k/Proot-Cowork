@@ -9,7 +9,8 @@ export DISPLAY=:99
 export XDG_RUNTIME_DIR=/tmp
 export TMPDIR=/tmp
 
-cd "$HOME" 2>/dev/null || cd /
+mkdir -p "$HOME"
+cd "$HOME"
 
 VNC_PORT="${VNC_PORT:-5900}"
 SCREEN="${SCREEN:-1280x720x24}"

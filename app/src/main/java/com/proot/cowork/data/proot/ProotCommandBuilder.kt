@@ -58,7 +58,7 @@ object ProotCommandBuilder {
         prootArgs += "0:0"
         prootArgs += "-r"
         prootArgs += rootfsDir.absolutePath
-        prootArgs += "--cwd=/"
+        prootArgs += "--cwd=/home/cowork"
         bindings.forEach { bind ->
             prootArgs += "-b"
             prootArgs += bind
