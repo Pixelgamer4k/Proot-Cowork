@@ -10,6 +10,8 @@ import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.system.Os
 import android.util.Log
+import com.proot.cowork.data.rootfs.RootfsValidator
+import java.io.File
 
 object X11ServerManager {
 
@@ -22,11 +24,12 @@ object X11ServerManager {
     private var startFailed = false
 
     @Synchronized
-    fun ensureStarted(context: Context): Boolean {
+    fun ensureStarted(context: Context, rootfsDir: File? = null): Boolean {
         if (startFailed) return false
         if (serverThread?.isAlive == true) return service != null || !startFailed
 
         val appContext = context.applicationContext
+        val rootfs = rootfsDir ?: File(appContext.filesDir, "rootfs")
         registerReceiver(appContext)
         startFailed = false
 
@@ -38,12 +41,10 @@ object X11ServerManager {
             return false
         }
 
-        try {
-            Os.setenv("TERMUX_X11_OVERRIDE_PACKAGE", appContext.packageName, true)
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not set TERMUX_X11_OVERRIDE_PACKAGE env", e)
+        if (!configureEnvironment(appContext, rootfs)) {
+            startFailed = true
+            return false
         }
-        System.setProperty("TERMUX_X11_OVERRIDE_PACKAGE", appContext.packageName)
 
         serverThread = Thread({
             try {
@@ -118,5 +119,29 @@ object X11ServerManager {
             context.registerReceiver(receiver, filter)
         }
         receiverRegistered = true
+    }
+
+    private fun configureEnvironment(context: Context, rootfs: File): Boolean {
+        try {
+            Os.setenv("TERMUX_X11_OVERRIDE_PACKAGE", context.packageName, true)
+            Os.setenv("TMPDIR", context.cacheDir.absolutePath, true)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not set X11 environment", e)
+        }
+        System.setProperty("TERMUX_X11_OVERRIDE_PACKAGE", context.packageName)
+
+        val xkbRoot = RootfsValidator.resolveXkbConfigRoot(rootfs)
+        if (xkbRoot == null) {
+            Log.e(TAG, "No xkb data found under ${rootfs.absolutePath}")
+            return false
+        }
+        try {
+            Os.setenv("XKB_CONFIG_ROOT", xkbRoot.absolutePath, true)
+            Log.i(TAG, "XKB_CONFIG_ROOT=${xkbRoot.absolutePath}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not set XKB_CONFIG_ROOT", e)
+            return false
+        }
+        return true
     }
 }

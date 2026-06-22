@@ -63,13 +63,15 @@ class ProotDesktopService : Service() {
             return
         }
 
+        RootfsValidator.repairLayout(rootfs)
+
         DesktopSession.setState(DesktopState.STARTING)
         DesktopSession.clearLogs()
         updateNotification("Starting Linux desktop…")
 
         scope.launch {
             try {
-                if (!X11ServerManager.ensureStarted(applicationContext)) {
+                if (!X11ServerManager.ensureStarted(applicationContext, rootfs)) {
                     DesktopSession.appendLog("Failed to start embedded X11 server")
                     DesktopSession.setState(DesktopState.STOPPED)
                     return@launch
