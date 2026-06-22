@@ -9,8 +9,7 @@ export DISPLAY=:99
 export XDG_RUNTIME_DIR=/tmp
 export TMPDIR=/tmp
 
-mkdir -p "$HOME"
-cd "$HOME"
+# Do not chdir here — guest chdir can return ENOSYS on Android; proot --cwd=/root sets CWD.
 
 VNC_PORT="${VNC_PORT:-5900}"
 SCREEN="${SCREEN:-1280x720x24}"
