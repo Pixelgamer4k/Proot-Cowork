@@ -7,6 +7,7 @@ import android.os.Build
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.rootfs.RootfsRepository
 import com.proot.cowork.debug.DebugStatusWriter
+import com.proot.cowork.userland.UserlandFiles
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
