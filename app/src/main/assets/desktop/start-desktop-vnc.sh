@@ -9,6 +9,10 @@ export DISPLAY=:99
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 export TMPDIR=/tmp
 export LANG="${LANG:-C.UTF-8}"
+export GDK_PIXBUF_DISABLE_GLYCIN=1
+export GTK_USE_PORTAL=0
+export NO_AT_BRIDGE=1
+export GDK_BACKEND=x11
 
 mkdir -p /tmp/.X11-unix "$HOME" "$XDG_RUNTIME_DIR"
 chmod 1777 /tmp 2>/dev/null || true

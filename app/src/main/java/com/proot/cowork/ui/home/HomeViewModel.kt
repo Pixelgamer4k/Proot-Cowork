@@ -54,7 +54,11 @@ class HomeViewModel(
             },
             importProgress = rootfs.importProgress,
             distroName = rootfs.distroName,
-            desktopLogHint = logs.lastOrNull(),
+            desktopLogHint = if (desktop == DesktopState.STOPPED) {
+                logs.lastOrNull(::looksLikeDesktopError) ?: logs.lastOrNull()
+            } else {
+                null
+            },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())
 
@@ -200,6 +204,15 @@ class HomeViewModel(
     }
 
     companion object {
+        private fun looksLikeDesktopError(line: String): Boolean {
+            val lower = line.lowercase()
+            return lower.contains("error") ||
+                lower.contains("missing") ||
+                lower.contains("failed") ||
+                lower.contains("timed out") ||
+                lower.contains("exit 1")
+        }
+
         fun factory(
             settingsRepository: SettingsRepository,
             rootfsRepository: RootfsRepository,

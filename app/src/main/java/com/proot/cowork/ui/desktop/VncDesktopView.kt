@@ -99,23 +99,29 @@ private fun VncFrame(
             }
             .pointerInput(bitmap.width, bitmap.height, viewWidth, viewHeight) {
                 var dragging = false
+                var lastX = 0
+                var lastY = 0
                 detectDragGestures(
                     onDragStart = { offset ->
                         dragging = true
                         val (x, y) = mapPoint(offset.x, offset.y, bitmap, viewWidth, viewHeight)
+                        lastX = x
+                        lastY = y
                         VncSession.sendPointer(x, y, BUTTON_LEFT)
                     },
                     onDragEnd = {
                         dragging = false
-                        VncSession.sendPointer(0, 0, 0)
+                        VncSession.sendPointer(lastX, lastY, 0)
                     },
                     onDragCancel = {
                         dragging = false
-                        VncSession.sendPointer(0, 0, 0)
+                        VncSession.sendPointer(lastX, lastY, 0)
                     },
                 ) { change, _ ->
                     if (dragging) {
                         val (x, y) = mapPoint(change.position.x, change.position.y, bitmap, viewWidth, viewHeight)
+                        lastX = x
+                        lastY = y
                         VncSession.sendPointer(x, y, BUTTON_LEFT)
                     }
                 }

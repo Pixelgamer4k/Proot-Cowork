@@ -19,6 +19,11 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export DISPLAY=:99
 export XDG_RUNTIME_DIR=/tmp
 export TMPDIR=/tmp
+export LANG="${LANG:-C.UTF-8}"
+export GDK_PIXBUF_DISABLE_GLYCIN=1
+export GTK_USE_PORTAL=0
+export NO_AT_BRIDGE=1
+export GDK_BACKEND=x11
 cd "$HOME" 2>/dev/null || cd /
 VNC_PORT="${VNC_PORT:-5900}"
 SCREEN="${SCREEN:-1280x720x24}"

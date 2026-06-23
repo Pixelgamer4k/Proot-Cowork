@@ -66,10 +66,29 @@ class RootfsRepository(
                         rootfsDir.deleteRecursively()
                     }
                     moveDirectoryPreservingSymlinks(partialDir, rootfsDir)
-                    settingsRepository.setRootfsInstalled("ubuntu")
-                    DesktopSession.setState(DesktopState.STARTING)
-                    startDesktopService()
-                    ImportResult.Success(rootfsDir)
+                    RootfsValidator.ensureStartScript(context, rootfsDir)
+                    when {
+                        !RootfsValidator.hasVncStack(rootfsDir) -> {
+                            settingsRepository.clearImportingState()
+                            DesktopSession.setState(DesktopState.NO_ROOTFS)
+                            ImportResult.Error(
+                                "Rootfs missing Xvfb or x11vnc. Run rootfs-setup/04-xfce-install.sh",
+                            )
+                        }
+                        !RootfsValidator.hasXfceStack(rootfsDir) -> {
+                            settingsRepository.clearImportingState()
+                            DesktopSession.setState(DesktopState.NO_ROOTFS)
+                            ImportResult.Error(
+                                "Rootfs missing startxfce4. Install: apt install -y xfce4 dbus-x11",
+                            )
+                        }
+                        else -> {
+                            settingsRepository.setRootfsInstalled("ubuntu")
+                            DesktopSession.setState(DesktopState.STARTING)
+                            startDesktopService()
+                            ImportResult.Success(rootfsDir)
+                        }
+                    }
                 }
             }
             is ImportResult.Error -> {

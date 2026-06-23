@@ -15,7 +15,7 @@ Android-native AI cowork agent with embedded proot Linux desktop. Inspired by Ki
 
 ## Build
 
-**v0.6.0-vnc** uses a **UserLAnd-style** stack: proot guest runs `Xvfb` + `x11vnc` + `startxfce4`; the app embeds a VNC viewer in the 16:9 panel.
+**v0.6.1-vnc** uses a **UserLAnd-style** stack: proot guest runs `Xvfb` + `x11vnc` + `startxfce4`; the app embeds a VNC viewer in the 16:9 panel.
 
 **Do not run `./gradlew` on the local PC** (especially ARM laptops) — use CI:
 
@@ -32,9 +32,8 @@ Debug APKs build on GitHub Actions (`ubuntu-latest`, ~5 minutes). See [AGENTS.md
 # Trigger manually
 gh workflow run build-debug-apk.yml
 
-# Download latest artifact
-gh run list --workflow=build-debug-apk.yml --limit 1
-gh run download <run-id> -n proot-cowork-debug-apk
+# Download latest artifact (helper script)
+bash scripts/get-latest-apk.sh /tmp/
 ```
 
 Local build (requires Android SDK):
@@ -47,7 +46,7 @@ Local build (requires Android SDK):
 
 1. Install the debug APK on your **ARM64** Android device
 2. Open app → tap **Add your rootfs** → select `proot-cowork-rootfs.tar.gz`
-3. Wait for import + auto-start (X11 + proot desktop in the top panel)
+3. Wait for import + auto-start (embedded VNC desktop in the top panel)
 4. Open **Settings** (gear) → set API URL, key, and model for Phase 3 agents
 
 ## Architecture

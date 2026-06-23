@@ -1,86 +1,65 @@
 # Proot Cowork Rootfs Setup
 
-Step-by-step instructions to build a custom proot-distro rootfs that Proot Cowork can import and auto-run.
+Build a Ubuntu proot-distro rootfs that Proot Cowork can import. The app runs the desktop with **embedded VNC** (Xvfb + x11vnc + XFCE inside proot).
 
 ## Prerequisites
 
-Install on your Android device (from **F-Droid**, not Play Store):
+On your Android device (Termux from **F-Droid**):
 
 1. [Termux](https://f-droid.org/en/packages/com.termux/)
-2. [Termux:X11](https://github.com/termux/termux-x11/releases)
-3. Inside Termux: `pkg update && pkg install proot-distro`
+2. Inside Termux: `pkg update && pkg install proot-distro`
 
-## Quick Setup (Ubuntu + XFCE)
+Termux:X11 is **not** required for Proot Cowork v0.6+.
 
-Run these scripts in order from Termux:
+## Quick Setup (Ubuntu + XFCE + VNC)
+
+Run these scripts in order from Termux (clone or copy `rootfs-setup/` into Termux):
 
 ```bash
-# 1. Bootstrap Termux host packages
 bash 01-termux-bootstrap.sh
-
-# 2. Install Ubuntu proot-distro
 bash 02-install-distro.sh
-
-# 3. Provision guest (user, sudo nopasswd, packages)
 bash 03-guest-provision.sh
-
-# 4. Install XFCE desktop
 bash 04-xfce-install.sh
-
-# 5. Install agent tools (git, python, node, curl, etc.)
-bash 05-agent-tools.sh
-```
-
-## Export Rootfs for Proot Cowork
-
-```bash
+bash 05-agent-tools.sh   # optional
 bash 06-export-rootfs.sh
 ```
 
 This creates `proot-cowork-rootfs.tar.gz` in your home directory.
 
-**Note:** proot-distro v5+ stores rootfs at `containers/<name>/rootfs/` (not the old `installed-rootfs/` path). The export script auto-detects both layouts.
+Transfer it to phone storage, then in Proot Cowork tap **Add your rootfs** → Import.
 
-**Do not use** `proot-distro backup` for Proot Cowork — that wraps files in `ubuntu/rootfs/` subfolders. We need a flat tarball with `start-desktop.sh` at the top level.
+## What the app does
 
-Transfer it to your phone storage, then in Proot Cowork tap **Add your rootfs** → Import.
+1. Extract tarball to `files/rootfs/`
+2. Deploy `/start-desktop.sh` (VNC session script) if needed
+3. Run proot with bind mounts for `/dev`, `/proc`, `/sys`
+4. Guest starts Xvfb `:99`, x11vnc on port `5900`, then `startxfce4`
+5. Embedded RFB viewer in the 16:9 panel connects to `127.0.0.1:5900`
 
-## Required Guest Files
+## Required guest packages
 
-The export must include `start-desktop.sh` at the rootfs root:
+- `xfce4`, `dbus-x11` — desktop session
+- `xvfb`, `x11vnc` — virtual display + VNC server
 
-```bash
-#!/bin/bash
-export DISPLAY=:0
-export XDG_RUNTIME_DIR=/tmp
-dbus-launch --exit-with-session startxfce4
-```
+Script `04-xfce-install.sh` installs these and writes `/start-desktop.sh`.
 
-And `start-desktop.sh` must be executable (`chmod +x`).
+**Do not use** `proot-distro backup` for export — it nests paths incorrectly. Use `06-export-rootfs.sh`.
 
-## Proot Cowork Auto-Start Sequence
+## Export note (proot-distro v5+)
 
-When you import the tarball, the app will:
-
-1. Extract to `files/rootfs/`
-2. Start embedded X11 server
-3. Run: `proot -r files/rootfs/ -b /dev -b /proc -b /sys --shared-tmp ...`
-4. Execute `/start-desktop.sh` inside guest
-5. Display desktop in the 16:9 panel
+Rootfs lives at `containers/<name>/rootfs/` (not `installed-rootfs/`). The export script detects both layouts.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
-| `/etc/sudoers.d/cowork: No such file or directory` | Fixed in script v2: installs `sudo` first, then `mkdir -p /etc/sudoers.d`. Re-run `03-guest-provision.sh` |
-| `can't sanitize binding /proc/self/fd/0` | Harmless proot warning on Termux; scripts use `-- bash -lc` instead of heredoc stdin |
-| `Rootfs not found at .../installed-rootfs/ubuntu` | proot-distro v5 stores rootfs at `containers/ubuntu/rootfs/` — use updated `06-export-rootfs.sh` |
-| Black X11 screen | Ensure `--shared-tmp` and `DISPLAY=:0` |
-| Desktop won't start | Check `start-desktop.sh` exists and is executable |
-| apt errors in guest | Re-run `03-guest-provision.sh` |
-| Large tarball | Remove apt cache: `apt clean` before export |
-| `unrecognized option: '-lc'` | proot-distro v5.3+ uses `-- bash -c` not `-e bash -lc` — pull latest scripts |
-| `proot error: can't chmod .../tmp/proot-*` | Harmless during optional apt clean — pull latest `06-export-rootfs.sh` (skips clean) or export manually with `tar` |
-| `tar: ./var/lib/snapd/void: Permission denied` | Exclude snapd and virtual mounts — use updated `06-export-rootfs.sh` or manual tar with `--exclude` flags below |
+| Import: missing Xvfb/x11vnc | Re-run `04-xfce-install.sh` |
+| Import: missing startxfce4 | `apt install -y xfce4 dbus-x11` in guest |
+| Grey/black VNC panel | Check logs in app; ensure `VNC_READY` in guest log |
+| XFCE panel crashes (glycin) | App sets `GDK_PIXBUF_DISABLE_GLYCIN=1` in start script |
+| `/etc/sudoers.d/cowork` error | Re-run `03-guest-provision.sh` (installs sudo first) |
+| `can't sanitize binding /proc/self/fd/0` | Harmless proot warning on Termux |
+| Large tarball | `apt clean` in guest before export |
+| `tar: ./var/lib/snapd/void` | Use updated `06-export-rootfs.sh` excludes |
 
-See also: [docs/RESEARCH.md](../docs/RESEARCH.md) section on X11 requirements.
+See [docs/RESEARCH.md](../docs/RESEARCH.md) for architecture notes.
