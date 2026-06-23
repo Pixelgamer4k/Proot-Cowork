@@ -77,6 +77,8 @@ $PROOT_LINKER "$PROOT" \
 -b /:/host-rootfs \
 -b $ROOTFS_PATH/support/:/support \
 -b $ROOTFS_PATH/support/nosudo:/usr/local/bin/sudo \
+-b $ROOTFS_PATH/support/fakesu:/bin/su \
+-b $ROOTFS_PATH/support/fakesu:/usr/bin/su \
 -b $ROOTFS_PATH/support/userland_profile.sh:/etc/profile.d/userland_profile.sh \
 -b $ROOTFS_PATH/support/ld.so.preload:/etc/ld.so.preload \
 -b $ROOT_PATH/support:/support/common \

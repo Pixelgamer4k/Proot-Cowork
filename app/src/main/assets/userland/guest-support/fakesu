@@ -1,0 +1,34 @@
+#!/bin/bash
+# Drop-in /bin/su for proot on Android: real setuid fails ("Function not implemented").
+# Handles: su USER -c COMMAND  (used by UserLAnd VNC scripts and nosudo).
+
+login_shell=0
+user="root"
+while getopts "ml" opt; do
+	case $opt in
+		l) login_shell=1 ;;
+		m) ;;
+	esac
+done
+shift $((OPTIND - 1))
+
+if [[ $# -ge 1 && "$1" != "-c" ]]; then
+	user="$1"
+	shift
+fi
+
+home="$(getent passwd "$user" 2>/dev/null | cut -d: -f6)"
+home="${home:-/home/$user}"
+export HOME="$home" USER="$user" LOGNAME="$user"
+cd "$home" 2>/dev/null || true
+
+if [[ "$1" == "-c" ]]; then
+	shift
+	if [[ $login_shell -eq 1 ]]; then
+		exec bash -l -c "$*"
+	else
+		exec bash -c "$*"
+	fi
+fi
+
+exec bash ${login_shell:+-l}

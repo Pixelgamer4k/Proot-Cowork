@@ -14,7 +14,7 @@ object UserlandGuestSupport {
             context.assets.open("$ASSET_PREFIX/$name").use { input ->
                 dest.outputStream().use { output -> input.copyTo(output) }
             }
-            if (name.endsWith(".sh")) {
+            if (name.endsWith(".sh") || name == "fakesu" || name == "nosudo") {
                 dest.setExecutable(true, false)
             }
         }
