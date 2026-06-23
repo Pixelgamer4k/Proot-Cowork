@@ -8,7 +8,7 @@ proot-distro login "$DISTRO" --shared-tmp -- bash -lc '
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-apt install -y xfce4 xfce4-terminal thunar mousepad xvfb x11vnc dbus-x11
+apt install -y xfce4 xfce4-terminal thunar mousepad xvfb x11vnc dbus-x11 x11-xserver-utils openbox
 
 cat > /start-desktop.sh << "EOF"
 #!/usr/bin/bash

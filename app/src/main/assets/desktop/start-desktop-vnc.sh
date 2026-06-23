@@ -92,12 +92,45 @@ cleanup() {
 }
 trap cleanup INT TERM
 
-# Solid background instead of the default X crosshatch.
-if command -v xsetroot >/dev/null 2>&1; then
-  DISPLAY=:99 xsetroot -solid "#1e1e2e" 2>/dev/null || true
-fi
+paint_background() {
+  if [ -x /usr/bin/xsetroot ]; then
+    /usr/bin/xsetroot -display :99 -solid "#1e1e2e" && echo "Desktop: solid background set"
+  else
+    echo "Desktop: xsetroot missing (apt install x11-xserver-utils)"
+  fi
+  if [ -x /usr/bin/xrefresh ]; then
+    /usr/bin/xrefresh -display :99 2>/dev/null || true
+  fi
+}
 
-# XFCE needs dbus/bwrap which fail under app-launched proot; prefer standalone WMs.
+launch_terminal() {
+  local term="$1"
+  local base
+  base="$(basename "$(readlink -f "$term" 2>/dev/null || echo "$term")")"
+  case "$base" in
+    xfce4-terminal)
+      DISPLAY=:99 "$term" \
+        --maximize \
+        --title="Proot Cowork" \
+        --color-bg="#1e1e2e" \
+        --color-text="#cdd6f4" \
+        --font="Monospace 14" \
+        --execute=bash &
+      ;;
+    xterm)
+      DISPLAY=:99 "$term" -maximized -fa Monospace -fs 14 \
+        -bg "#1e1e2e" -fg "#cdd6f4" -title "Proot Cowork" -e bash -l &
+      ;;
+    *)
+      DISPLAY=:99 "$term" --maximize --title="Proot Cowork" --execute=bash 2>/dev/null \
+        || DISPLAY=:99 "$term" -e bash &
+      ;;
+  esac
+}
+
+paint_background
+
+# Optional lightweight WM; xfwm4 needs a full XFCE session and usually does nothing useful here.
 WM=""
 for candidate in /usr/bin/openbox /usr/bin/fluxbox; do
   if [ -x "$candidate" ]; then
@@ -105,12 +138,9 @@ for candidate in /usr/bin/openbox /usr/bin/fluxbox; do
     break
   fi
 done
-if [ -z "$WM" ] && [ -x /usr/bin/xfwm4 ]; then
-  WM=/usr/bin/xfwm4
-fi
 
 TERM_BIN=""
-for candidate in /usr/bin/xterm /usr/bin/x-terminal-emulator; do
+for candidate in /usr/bin/xfce4-terminal /usr/bin/xterm /usr/bin/x-terminal-emulator; do
   if [ -x "$candidate" ]; then
     TERM_BIN="$candidate"
     break
@@ -120,17 +150,25 @@ done
 set +e
 wm_pid=""
 if [ -n "$WM" ]; then
+  echo "Desktop: starting WM $WM"
   DISPLAY=:99 "$WM" &
   wm_pid=$!
   sleep 1
 fi
 
-DISPLAY=:99 xsetroot -solid "#1e1e2e" 2>/dev/null || true
+paint_background
 
 if [ -n "$TERM_BIN" ]; then
-  DISPLAY=:99 "$TERM_BIN" -geometry 120x35+24+24 -fa Monospace -fs 14 \
-    -bg "#1e1e2e" -fg "#cdd6f4" -title "Proot Cowork" -e bash -l &
-  sleep 0.5
+  echo "Desktop: starting terminal $TERM_BIN"
+  launch_terminal "$TERM_BIN"
+  sleep 1
+  if DISPLAY=:99 xwininfo -root -tree 2>/dev/null | grep -qiE 'xfce4-terminal|XTerm|proot'; then
+    echo "Desktop: terminal window visible"
+  else
+    echo "Desktop: terminal may have failed to map (check xwininfo)"
+  fi
+else
+  echo "Desktop: no terminal binary found"
 fi
 set -e
 
