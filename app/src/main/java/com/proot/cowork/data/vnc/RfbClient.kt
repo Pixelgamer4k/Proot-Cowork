@@ -29,6 +29,8 @@ class RfbClient(
     private var greenShift = 8
     private var blueShift = 0
 
+    private val ioLock = Any()
+
     val isConnected: Boolean
         get() = socket?.isConnected == true && socket?.isClosed == false
 
@@ -52,55 +54,66 @@ class RfbClient(
     }
 
     fun sendPointerEvent(x: Int, y: Int, buttonMask: Int) {
-        val out = output ?: return
-        out.writeByte(5)
-        out.writeByte(buttonMask)
-        out.writeShort(x.coerceIn(0, maxOf(0, width - 1)))
-        out.writeShort(y.coerceIn(0, maxOf(0, height - 1)))
-        out.flush()
+        synchronized(ioLock) {
+            val out = output ?: return
+            if (!isConnected) return
+            out.writeByte(5)
+            out.writeByte(buttonMask)
+            out.writeShort(x.coerceIn(0, maxOf(0, width - 1)))
+            out.writeShort(y.coerceIn(0, maxOf(0, height - 1)))
+            out.flush()
+        }
     }
 
     fun sendKeyEvent(key: Int, down: Boolean) {
-        val out = output ?: return
-        out.writeByte(4)
-        out.writeByte(if (down) 1 else 0)
-        out.writeByte(0)
-        out.writeByte(0)
-        out.writeInt(key)
-        out.flush()
+        synchronized(ioLock) {
+            val out = output ?: return
+            if (!isConnected) return
+            out.writeByte(4)
+            out.writeByte(if (down) 1 else 0)
+            out.writeByte(0)
+            out.writeByte(0)
+            out.writeInt(key)
+            out.flush()
+        }
     }
 
     fun requestFramebufferUpdate(incremental: Boolean) {
-        val out = output ?: return
-        out.writeByte(3)
-        out.writeByte(if (incremental) 1 else 0)
-        out.writeShort(0)
-        out.writeShort(0)
-        out.writeShort(width)
-        out.writeShort(height)
-        out.flush()
+        synchronized(ioLock) {
+            val out = output ?: return
+            if (!isConnected) return
+            out.writeByte(3)
+            out.writeByte(if (incremental) 1 else 0)
+            out.writeShort(0)
+            out.writeShort(0)
+            out.writeShort(width)
+            out.writeShort(height)
+            out.flush()
+        }
     }
 
     fun readFramebuffer(bitmap: Bitmap?): Bitmap {
-        val inp = input ?: throw IllegalStateException("Not connected")
-        val target = bitmap?.takeIf { it.width == width && it.height == height }
-            ?: Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        synchronized(ioLock) {
+            val inp = input ?: throw IllegalStateException("Not connected")
+            val target = bitmap?.takeIf { it.width == width && it.height == height }
+                ?: Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
 
-        while (true) {
-            val messageType = inp.readUnsignedByte()
-            when (messageType) {
-                0 -> {
-                    inp.readByte() // padding
-                    val count = inp.readUnsignedShort()
-                    repeat(count) {
-                        decodeRectangle(inp, target)
+            while (true) {
+                val messageType = inp.readUnsignedByte()
+                when (messageType) {
+                    0 -> {
+                        inp.readByte() // padding
+                        val count = inp.readUnsignedShort()
+                        repeat(count) {
+                            decodeRectangle(inp, target)
+                        }
+                        return target
                     }
-                    return target
+                    1 -> skipColourMap(inp)
+                    2 -> { /* bell */ }
+                    3 -> skipServerCutText(inp)
+                    else -> throw EOFException("Unknown RFB message type $messageType")
                 }
-                1 -> skipColourMap(inp)
-                2 -> { /* bell */ }
-                3 -> skipServerCutText(inp)
-                else -> throw EOFException("Unknown RFB message type $messageType")
             }
         }
     }

@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 object VncSession {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -44,9 +45,11 @@ object VncSession {
                     while (isActive && rfb.isConnected) {
                         rfb.requestFramebufferUpdate(incremental)
                         bitmap = rfb.readFramebuffer(bitmap)
-                        _frame.value = bitmap
+                        withContext(Dispatchers.Main) {
+                            _frame.value = bitmap
+                        }
                         incremental = true
-                        delay(16)
+                        delay(33)
                     }
                 } catch (e: Exception) {
                     _connected.value = false
@@ -70,11 +73,17 @@ object VncSession {
     }
 
     fun sendPointer(x: Int, y: Int, buttonMask: Int) {
-        client?.sendPointerEvent(x, y, buttonMask)
+        val rfb = client ?: return
+        scope.launch {
+            runCatching { rfb.sendPointerEvent(x, y, buttonMask) }
+        }
     }
 
     fun sendKey(key: Int, down: Boolean) {
-        client?.sendKeyEvent(key, down)
+        val rfb = client ?: return
+        scope.launch {
+            runCatching { rfb.sendKeyEvent(key, down) }
+        }
     }
 
     fun currentFrame(): Bitmap? = _frame.value
