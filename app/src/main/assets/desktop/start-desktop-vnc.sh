@@ -68,7 +68,8 @@ paint_background() {
 
 install_guest_stubs() {
   mkdir -p /usr/local/bin
-  cat > /usr/local/bin/bwrap <<'EOF'
+  local stub=/usr/local/bin/cowork-bwrap-stub
+  cat > "$stub" <<'EOF'
 #!/usr/bin/bash
 for i in "${!@}"; do
   if [ "${!i}" = "--" ]; then
@@ -100,8 +101,13 @@ if [ "${1:-}" = "--exit-with-session" ]; then
 fi
 exec "$@"
 EOF
-  chmod +x /usr/local/bin/bwrap /usr/local/bin/dbus-launch
-  echo "Desktop: guest stubs installed in /usr/local/bin"
+  chmod +x "$stub" /usr/local/bin/dbus-launch
+  if [ -x /usr/bin/bwrap ] && [ ! -f /usr/bin/bwrap.real ]; then
+    mv /usr/bin/bwrap /usr/bin/bwrap.real
+  fi
+  cp "$stub" /usr/bin/bwrap
+  chmod +x /usr/bin/bwrap
+  echo "Desktop: guest stubs installed (/usr/bin/bwrap replaced)"
 }
 
 launch_visible_apps() {
@@ -116,6 +122,8 @@ launch_visible_apps() {
 
   if [ -x /usr/bin/xfce4-terminal ]; then
     echo "Desktop: starting xfce4-terminal"
+    export GTK_USE_PORTAL=0
+    export NO_AT_BRIDGE=1
     DISPLAY=:99 /usr/bin/xfce4-terminal \
       --maximize \
       --title="Proot Cowork" \
