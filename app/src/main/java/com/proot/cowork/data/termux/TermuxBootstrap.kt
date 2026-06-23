@@ -30,28 +30,34 @@ object TermuxBootstrap {
             Log.w(TAG, "No $ASSET_NAME in assets — run scripts/fetch-termux-bootstrap.sh")
             return
         }
-        val stamp = File(context.filesDir, STAMP)
-        val prefix = prefixDir(context)
-        Log.i(TAG, "Extracting Termux bootstrap to ${prefix.absolutePath}")
-        prefix.mkdirs()
-        context.assets.open(ASSET_NAME).use { raw ->
-            ZipArchiveInputStream(BufferedInputStream(raw)).use { zip ->
-                var entry = zip.nextZipEntry
-                while (entry != null) {
-                    if (!entry.isDirectory && entry.name.isNotBlank()) {
-                        val out = File(prefix, entry.name)
-                        out.parentFile?.mkdirs()
-                        FileOutputStream(out).use { zip.copyTo(it) }
-                        if (entry.name.startsWith("bin/") || entry.name.startsWith("libexec/")) {
-                            out.setExecutable(true, false)
+        try {
+            val stamp = File(context.filesDir, STAMP)
+            val prefix = prefixDir(context)
+            Log.i(TAG, "Extracting Termux bootstrap to ${prefix.absolutePath}")
+            prefix.mkdirs()
+            context.assets.open(ASSET_NAME).use { raw ->
+                ZipArchiveInputStream(BufferedInputStream(raw)).use { zip ->
+                    var entry = zip.nextZipEntry
+                    while (entry != null) {
+                        if (!entry.isDirectory && entry.name.isNotBlank()) {
+                            val out = File(prefix, entry.name)
+                            out.parentFile?.mkdirs()
+                            FileOutputStream(out).use { zip.copyTo(it) }
+                            if (entry.name.startsWith("bin/") || entry.name.startsWith("libexec/")) {
+                                out.setExecutable(true, false)
+                            }
                         }
+                        entry = zip.nextZipEntry
                     }
-                    entry = zip.nextZipEntry
                 }
             }
+            stamp.writeText("ok")
+            Log.i(TAG, "Termux bootstrap installed")
+        } catch (e: OutOfMemoryError) {
+            Log.e(TAG, "Termux bootstrap extraction OOM — skipping", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Termux bootstrap extraction failed — skipping", e)
         }
-        stamp.writeText("ok")
-        Log.i(TAG, "Termux bootstrap installed")
     }
 
     fun termuxEnv(context: Context): Map<String, String> {

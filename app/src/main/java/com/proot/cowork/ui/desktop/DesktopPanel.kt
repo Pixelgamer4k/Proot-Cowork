@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -163,21 +164,33 @@ private fun ImportingContent(progress: Float) {
 
 @Composable
 private fun StartingContent() {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        CircularProgressIndicator()
-        Spacer(modifier = Modifier.height(12.dp))
-        Text("Booting proot + ${if (BuildConfig.USE_TERMUX_X11) "Termux:X11" else "VNC"} desktop…")
+    if (BuildConfig.USE_TERMUX_X11) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            X11DesktopView(modifier = Modifier.fillMaxSize())
+            Column(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                CircularProgressIndicator()
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Booting proot + Termux:X11 desktop…")
+            }
+        }
+    } else {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator()
+            Spacer(modifier = Modifier.height(12.dp))
+            Text("Booting proot + VNC desktop…")
+        }
     }
 }
 
 @Composable
 private fun RunningDesktopContent() {
     if (BuildConfig.USE_TERMUX_X11) {
-        X11DesktopView(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-        )
+        X11DesktopView(modifier = Modifier.fillMaxSize())
     } else {
         VncDesktopView(
             modifier = Modifier

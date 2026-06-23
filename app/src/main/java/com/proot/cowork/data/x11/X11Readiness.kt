@@ -5,6 +5,10 @@ import kotlinx.coroutines.delay
 import java.io.File
 
 object X11Readiness {
+    fun peekSocket(tmpDir: File, display: Int = 0): Boolean {
+        return File(tmpDir, ".X11-unix/X$display").exists()
+    }
+
     suspend fun awaitSocket(tmpDir: File, display: Int = 0, timeoutMs: Long = 60_000): Boolean {
         val socket = File(tmpDir, ".X11-unix/X$display")
         val deadline = System.currentTimeMillis() + timeoutMs

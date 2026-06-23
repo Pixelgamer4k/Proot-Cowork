@@ -35,6 +35,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InterruptedIOException
 import java.io.InputStreamReader
@@ -70,7 +71,13 @@ class ProotDesktopService : Service() {
     private fun startDesktop() {
         if (prootProcess?.isAlive == true) {
             DesktopSession.setState(DesktopState.RUNNING)
-            updateNotification("Linux desktop running (VNC)")
+            updateNotification(
+                if (BuildConfig.USE_TERMUX_X11) {
+                    "Linux desktop running (Termux:X11)"
+                } else {
+                    "Linux desktop running (VNC)"
+                },
+            )
             return
         }
         if (desktopJob?.isActive == true) return
@@ -84,8 +91,6 @@ class ProotDesktopService : Service() {
         }
 
         RootfsValidator.repairLayout(rootfs)
-        RootfsValidator.repairLayout(rootfs)
-        RootfsValidator.ensureStartScript(applicationContext, rootfs)
 
         if (BuildConfig.USE_TERMUX_X11) {
             if (!RootfsValidator.hasXfceStack(rootfs)) {
@@ -115,6 +120,10 @@ class ProotDesktopService : Service() {
         desktopJob = scope.launch {
             val logLines = Channel<String>(capacity = Channel.UNLIMITED)
             try {
+                withContext(Dispatchers.IO) {
+                    RootfsValidator.ensureStartScript(applicationContext, rootfs)
+                }
+
                 TermuxBootstrap.ensureInstalled(applicationContext)
 
                 val runtime = RuntimeBootstrap(applicationContext).ensureRuntime()
