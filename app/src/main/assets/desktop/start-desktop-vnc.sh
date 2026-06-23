@@ -6,11 +6,12 @@ export HOME="${HOME:-/home/cowork}"
 export USER="${USER:-cowork}"
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export DISPLAY=:99
-export XDG_RUNTIME_DIR=/tmp
+export XDG_RUNTIME_DIR=/tmp/cowork-runtime
 export TMPDIR=/tmp
 
-mkdir -p /tmp/.X11-unix
+mkdir -p /tmp/.X11-unix "$XDG_RUNTIME_DIR"
 chmod 1777 /tmp 2>/dev/null || true
+chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
 chmod 700 /tmp/.X11-unix 2>/dev/null || true
 rm -f /tmp/.X*-lock
 
@@ -31,7 +32,17 @@ pkill -x Xvfb 2>/dev/null || true
 pkill -f "x11vnc.*:99" 2>/dev/null || true
 sleep 0.5
 
-"$XVFB" :99 -screen 0 "$SCREEN" -ac +extension GLX +render -noreset -extension MIT-SHM &
+# linkshim only for Xvfb (app-launched proot); never preload libandroid-shmem globally.
+_xvfb_preload=""
+if [ -f /usr/lib/libcowork_linkshim.so ]; then
+  _xvfb_preload=/usr/lib/libcowork_linkshim.so
+fi
+
+if [ -n "$_xvfb_preload" ]; then
+  LD_PRELOAD="$_xvfb_preload" "$XVFB" :99 -screen 0 "$SCREEN" -ac +extension GLX +render -noreset -extension MIT-SHM &
+else
+  "$XVFB" :99 -screen 0 "$SCREEN" -ac +extension GLX +render -noreset -extension MIT-SHM &
+fi
 XVFB_PID=$!
 sleep 2
 
@@ -80,13 +91,23 @@ cleanup() {
   kill "$X11VNC_PID" 2>/dev/null || true
   pkill -f "x11vnc.*:99" 2>/dev/null || true
 }
-trap cleanup EXIT
+trap cleanup INT TERM
 
-mkdir -p /tmp
-export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/tmp/dbus-session}"
+# XFCE/glycin uses bwrap sandboxes that fail under app-launched proot; keep VNC up regardless.
+export GTK_USE_PORTAL=0
+export NO_AT_BRIDGE=1
+export GDK_BACKEND=x11
+export XDG_SESSION_TYPE=x11
 
 if command -v dbus-launch >/dev/null 2>&1; then
-  exec dbus-launch --exit-with-session "$XFCE"
-else
-  exec "$XFCE"
+  eval "$(dbus-launch --sh-syntax)" 2>/dev/null || true
 fi
+
+set +e
+"$XFCE" &
+xfce_pid=$!
+set -e
+
+# Hold the session open while VNC is serving.
+wait "$XVFB_PID" "$X11VNC_PID"
+kill "$xfce_pid" 2>/dev/null || true
