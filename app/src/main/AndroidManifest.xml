@@ -36,6 +36,15 @@
         </activity>
 
         <service
+            android:name=".service.TermuxStackService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="termux_x11_stack" />
+        </service>
+
+        <service
             android:name=".service.ProotDesktopService"
             android:exported="false"
             android:foregroundServiceType="specialUse">

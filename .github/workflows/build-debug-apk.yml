@@ -25,6 +25,12 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Setup Termux stack (x11 + terminal modules)
+        run: bash scripts/setup-termux-stack.sh
+
+      - name: Prepare Termux bootstrap asset
+        run: bash scripts/prepare-termux-bootstrap.sh
+
       - name: Fetch UserLAnd runtime
         run: bash scripts/fetch-userland-runtime.sh
 
@@ -33,7 +39,7 @@ jobs:
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
-        timeout-minutes: 30
+        timeout-minutes: 60
 
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4

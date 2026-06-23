@@ -28,8 +28,8 @@ import com.proot.cowork.domain.desktop.TermuxStackSession
 @Composable
 fun TermuxStackPanel(
     modifier: Modifier = Modifier,
-    termuxLayer: @Composable (Modifier) -> Unit = { TermuxLayerPlaceholder(it) },
-    x11Layer: @Composable (Modifier) -> Unit = { X11LayerPlaceholder(it) },
+    termuxLayer: @Composable (Modifier) -> Unit = { EmbeddedTermuxSurface(it) },
+    x11Layer: @Composable (Modifier) -> Unit = { EmbeddedX11Surface(it) },
 ) {
     val frontLayer by TermuxStackSession.frontLayer.collectAsState()
     val x11Ready by TermuxStackSession.x11Ready.collectAsState()

@@ -1,5 +1,6 @@
 package com.proot.cowork
 
+import android.os.Build
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -13,8 +14,10 @@ import androidx.lifecycle.lifecycleScope
 import com.proot.cowork.data.proot.RuntimeBootstrap
 import com.proot.cowork.data.rootfs.RootfsTarballLocator
 import com.proot.cowork.data.vnc.VncPortProbe
+import com.proot.cowork.domain.desktop.TERMUX_STACK_DESKTOP
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
+import com.proot.cowork.service.TermuxStackService
 import com.proot.cowork.ui.ProotCoworkApp
 import com.proot.cowork.ui.theme.ProotCoworkTheme
 import kotlinx.coroutines.Dispatchers
@@ -72,6 +75,15 @@ class MainActivity : ComponentActivity() {
         }
 
         lifecycleScope.launch {
+            if (TERMUX_STACK_DESKTOP) {
+                val svc = Intent(this@MainActivity, TermuxStackService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(svc)
+                } else {
+                    startService(svc)
+                }
+                return@launch
+            }
             app.rootfsRepository.repairStateOnStartup()
             val state = app.settingsRepository.rootfsState.first { !it.isImporting }
             if (state.isInstalled && app.rootfsRepository.canStartDesktop()) {
