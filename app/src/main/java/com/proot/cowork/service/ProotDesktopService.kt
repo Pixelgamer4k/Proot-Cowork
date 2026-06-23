@@ -48,7 +48,7 @@ class ProotDesktopService : Service() {
     override fun onCreate() {
         super.onCreate()
         settingsRepository = (application as ProotCoworkApp).settingsRepository
-        userlandFiles = UserlandFiles(this, applicationInfo.nativeLibraryDir)
+        userlandFiles = (application as ProotCoworkApp).userlandFiles
         val executor = BusyboxExecutor(
             userlandFiles,
             ProotDebugLogger(getSharedPreferences("userland", MODE_PRIVATE), userlandFiles),

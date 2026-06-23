@@ -7,7 +7,6 @@ import android.os.Build
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.rootfs.RootfsRepository
 import com.proot.cowork.debug.DebugStatusWriter
-import com.proot.cowork.userland.UserlandFiles
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,15 +20,17 @@ class ProotCoworkApp : Application() {
         private set
     lateinit var rootfsRepository: RootfsRepository
         private set
+    lateinit var userlandFiles: UserlandFiles
+        private set
 
     override fun onCreate() {
         super.onCreate()
         settingsRepository = SettingsRepository(this)
         rootfsRepository = RootfsRepository(this, settingsRepository)
+        userlandFiles = UserlandFiles(this, applicationInfo.nativeLibraryDir)
         DebugStatusWriter.init(this)
         createNotificationChannels()
         appScope.launch {
-            UserlandFiles(this@ProotCoworkApp, applicationInfo.nativeLibraryDir)
             rootfsRepository.repairStateOnStartup()
         }
     }
