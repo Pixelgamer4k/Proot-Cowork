@@ -95,7 +95,6 @@ dependencies {
 
     implementation(project(":terminal-emulator"))
     implementation(project(":terminal-view"))
-    implementation(project(":termux-shared"))
     implementation(project(":termux-x11-app"))
 
     debugImplementation("androidx.compose.ui:ui-tooling")

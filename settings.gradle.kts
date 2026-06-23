@@ -28,9 +28,6 @@ project(":terminal-emulator").projectDir = file("third_party/termux-app/terminal
 include(":terminal-view")
 project(":terminal-view").projectDir = file("third_party/termux-app/terminal-view")
 
-include(":termux-shared")
-project(":termux-shared").projectDir = file("third_party/termux-app/termux-shared")
-
 include(":shell-loader:stub")
 project(":shell-loader:stub").projectDir = file("third_party/termux-x11/shell-loader/stub")
 

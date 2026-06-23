@@ -2,8 +2,6 @@ package com.proot.cowork.termux.terminal
 
 import android.content.Context
 import com.proot.cowork.termux.bootstrap.TermuxBootstrap
-import com.termux.shared.terminal.TermuxTerminalSessionClientBase
-import com.termux.shared.terminal.TermuxTerminalViewClientBase
 import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
 
@@ -20,11 +18,7 @@ object TermuxTerminalController {
         if (!bash.canExecute()) return false
 
         val home = TermuxBootstrap.prefixDir(context).resolve("home").absolutePath
-        val client = object : TermuxTerminalSessionClientBase() {
-            override fun onTextChanged(changedSession: TerminalSession) {
-                terminalView.post { terminalView.onScreenUpdated() }
-            }
-        }
+        val client = CoworkTerminalSessionClient(terminalView)
         val newSession = TerminalSession(
             bash.absolutePath,
             home,
@@ -34,7 +28,7 @@ object TermuxTerminalController {
             client,
         )
         session = newSession
-        terminalView.setTerminalViewClient(TermuxTerminalViewClientBase())
+        terminalView.setTerminalViewClient(CoworkTerminalViewClient())
         terminalView.attachSession(newSession)
         return true
     }
