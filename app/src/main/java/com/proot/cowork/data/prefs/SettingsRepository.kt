@@ -108,6 +108,18 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
+    /** Repair UI when rootfs files exist but the installed flag was lost (e.g. after debug import). */
+    suspend fun ensureRootfsInstalledIfPresent(rootfsDir: java.io.File) {
+        context.dataStore.edit { prefs ->
+            if (prefs[Keys.ROOTFS_INSTALLED] != true) {
+                prefs[Keys.ROOTFS_INSTALLED] = true
+                if (prefs[Keys.ROOTFS_NAME].isNullOrBlank()) {
+                    prefs[Keys.ROOTFS_NAME] = "ubuntu"
+                }
+            }
+        }
+    }
+
     fun getRootfsDir() = context.filesDir.resolve("rootfs")
 
     fun getRootfsPartialDir() = context.filesDir.resolve("rootfs.partial")

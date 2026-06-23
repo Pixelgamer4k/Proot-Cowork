@@ -124,7 +124,7 @@ class RfbClient(
             types.contains(1) -> 1 // None
             else -> types.first()
         }
-        out.writeInt(chosen)
+        out.writeByte(chosen)
         out.flush()
 
         if (chosen == 1) {

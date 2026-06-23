@@ -19,9 +19,8 @@ VNC_PORT="${VNC_PORT:-5900}"
 SCREEN="${SCREEN:-1280x720x24}"
 XVFB=/usr/bin/Xvfb
 X11VNC=/usr/bin/x11vnc
-XFCE=/usr/bin/startxfce4
 
-for bin in "$XVFB" "$X11VNC" "$XFCE"; do
+for bin in "$XVFB" "$X11VNC"; do
   if [ ! -x "$bin" ]; then
     echo "Missing $bin — rebuild rootfs with: apt install -y xvfb x11vnc xfce4"
     exit 1
@@ -93,21 +92,30 @@ cleanup() {
 }
 trap cleanup INT TERM
 
-# XFCE/glycin uses bwrap sandboxes that fail under app-launched proot; keep VNC up regardless.
-export GTK_USE_PORTAL=0
-export NO_AT_BRIDGE=1
-export GDK_BACKEND=x11
-export XDG_SESSION_TYPE=x11
-
-if command -v dbus-launch >/dev/null 2>&1; then
-  eval "$(dbus-launch --sh-syntax)" 2>/dev/null || true
-fi
+# XFCE needs dbus/bwrap which fail under app-launched proot; use a minimal WM instead.
+WM=""
+for candidate in /usr/bin/openbox /usr/bin/fluxbox /usr/bin/xfwm4; do
+  if [ -x "$candidate" ]; then
+    WM="$candidate"
+    break
+  fi
+done
 
 set +e
-"$XFCE" &
-xfce_pid=$!
+if [ -n "$WM" ]; then
+  "$WM" &
+  wm_pid=$!
+  if command -v xterm >/dev/null 2>&1; then
+    xterm -maximized -fa "Monospace" -fs 12 &
+  fi
+else
+  if command -v xterm >/dev/null 2>&1; then
+    xterm -maximized -fa "Monospace" -fs 12 &
+  fi
+fi
 set -e
 
 # Hold the session open while VNC is serving.
 wait "$XVFB_PID" "$X11VNC_PID"
-kill "$xfce_pid" 2>/dev/null || true
+kill "$wm_pid" 2>/dev/null || true
+pkill -x xterm 2>/dev/null || true

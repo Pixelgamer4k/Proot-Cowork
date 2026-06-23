@@ -30,6 +30,7 @@ class RootfsRepository(
             DesktopSession.setState(DesktopState.NO_ROOTFS)
         } else {
             settingsRepository.clearImportingState()
+            settingsRepository.ensureRootfsInstalledIfPresent(rootfsDir)
         }
     }
 
