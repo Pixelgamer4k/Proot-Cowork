@@ -34,10 +34,11 @@ object RootfsTarballLocator {
             candidates += pathAliases(pathHint)
         }
 
+        // Prefer internal app storage (adb pipe / run-as) over shell-owned external drops.
+        candidates += File(context.filesDir, name)
         for (dir in appExternalDataDirs(context)) {
             candidates += File(dir, name)
         }
-        candidates += File(context.filesDir, name)
         context.cacheDir?.let { candidates += File(it, name) }
 
         if (pathHint.isNullOrBlank()) {

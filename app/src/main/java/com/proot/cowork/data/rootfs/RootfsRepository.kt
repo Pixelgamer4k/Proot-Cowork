@@ -132,23 +132,36 @@ class RootfsRepository(
 
     fun startDesktopService() {
         if (!canStartDesktop()) return
-        val intent = android.content.Intent(context, ProotDesktopService::class.java)
-        context.startForegroundService(intent)
+        try {
+            val intent = android.content.Intent(context, ProotDesktopService::class.java)
+            context.startForegroundService(intent)
+        } catch (e: Exception) {
+            DesktopSession.appendLog("startDesktopService skipped: ${e.message}")
+        }
     }
 
     fun stopDesktopService() {
-        val intent = android.content.Intent(context, ProotDesktopService::class.java).apply {
-            action = ProotDesktopService.ACTION_STOP
+        try {
+            val intent = android.content.Intent(context, ProotDesktopService::class.java).apply {
+                action = ProotDesktopService.ACTION_STOP
+            }
+            context.startService(intent)
+        } catch (e: Exception) {
+            // adb IMPORT_ROOTFS runs from a background broadcast; Android 12+ blocks this.
+            DesktopSession.appendLog("stopDesktopService skipped: ${e.message}")
         }
-        context.startService(intent)
     }
 
     fun rebootDesktopService() {
         if (!canStartDesktop()) return
-        val intent = android.content.Intent(context, ProotDesktopService::class.java).apply {
-            action = ProotDesktopService.ACTION_REBOOT
+        try {
+            val intent = android.content.Intent(context, ProotDesktopService::class.java).apply {
+                action = ProotDesktopService.ACTION_REBOOT
+            }
+            context.startForegroundService(intent)
+        } catch (e: Exception) {
+            DesktopSession.appendLog("rebootDesktopService skipped: ${e.message}")
         }
-        context.startForegroundService(intent)
     }
 
     private fun moveDirectoryPreservingSymlinks(source: File, dest: File) {
