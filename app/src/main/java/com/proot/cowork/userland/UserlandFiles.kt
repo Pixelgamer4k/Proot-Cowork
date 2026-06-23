@@ -17,7 +17,7 @@ class UserlandFiles(
     val filesDir: File = context.filesDir
     val libDir: File = File(libDirPath)
     val supportDir: File = File(filesDir, "support")
-    val emulatedScopedDir = context.getExternalFilesDir(null)!!
+    val emulatedScopedDir = context.getExternalFilesDir(null) ?: context.filesDir
     val emulatedUserDir = File(emulatedScopedDir, "storage")
 
     val sdCardScopedDir: File? = resolveSdCardScopedStorage(context)
