@@ -5,6 +5,7 @@ import com.proot.cowork.domain.desktop.TermuxStackSession
 import com.proot.cowork.termux.bootstrap.TermuxBootstrap
 import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
+import java.io.File
 
 object TermuxTerminalController {
 
@@ -22,32 +23,32 @@ object TermuxTerminalController {
         ensureRenderer(terminalView)
         terminalView.setTerminalViewClient(CoworkTerminalViewClient())
 
-        val startSession = {
-            if (session?.isRunning == true) return@startSession
-            val home = TermuxBootstrap.prefixDir(context).resolve("home").absolutePath
-            val client = CoworkTerminalSessionClient(terminalView)
-            val newSession = TerminalSession(
-                bash.absolutePath,
-                home,
-                arrayOf("-l"),
-                TermuxBootstrap.shellEnvironment(context),
-                10_000,
-                client,
-            )
-            session = newSession
-            terminalView.attachSession(newSession)
-            if (newSession.isRunning) {
-                TermuxStackSession.setTermuxReady(true)
-            }
-        }
-
         if (terminalView.width > 0 && terminalView.height > 0) {
-            startSession()
+            startSession(terminalView, context, bash)
             return session?.isRunning == true
         }
 
-        terminalView.post { startSession() }
+        terminalView.post { startSession(terminalView, context, bash) }
         return false
+    }
+
+    private fun startSession(terminalView: TerminalView, context: Context, bash: File) {
+        if (session?.isRunning == true) return
+        val home = TermuxBootstrap.prefixDir(context).resolve("home").absolutePath
+        val client = CoworkTerminalSessionClient(terminalView)
+        val newSession = TerminalSession(
+            bash.absolutePath,
+            home,
+            arrayOf("-l"),
+            TermuxBootstrap.shellEnvironment(context),
+            10_000,
+            client,
+        )
+        session = newSession
+        terminalView.attachSession(newSession)
+        if (newSession.isRunning) {
+            TermuxStackSession.setTermuxReady(true)
+        }
     }
 
     private fun ensureRenderer(terminalView: TerminalView) {
