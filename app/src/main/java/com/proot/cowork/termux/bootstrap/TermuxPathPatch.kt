@@ -18,7 +18,7 @@ object TermuxPathPatch {
     private const val LEGACY_CACHE_USER = "/data/user/0/com.termux/cache"
 
     fun applyIfNeeded(context: Context, prefix: File): Boolean {
-        val marker = File(prefix, ".termux_paths_patched_v6")
+        val marker = File(prefix, ".termux_paths_patched_v7")
         if (marker.isFile) return true
 
         val filesRoot = context.filesDir.absolutePath
@@ -28,11 +28,16 @@ object TermuxPathPatch {
 
         TermuxBinaryRestore.unwrapPackageManagers(prefix)
 
+        // Always refresh apt config (v2 removes broken Dir::Etc overrides).
+        File(prefix, ".termux_apt_config_v1").delete()
+        TermuxAptConfig.applyIfNeeded(context, prefix)
+
         val hadTree = File(prefix, ".termux_paths_patched_v1").isFile ||
             File(prefix, ".termux_paths_patched_v2").isFile ||
             File(prefix, ".termux_paths_patched_v3").isFile ||
             File(prefix, ".termux_paths_patched_v4").isFile ||
-            File(prefix, ".termux_paths_patched_v5").isFile
+            File(prefix, ".termux_paths_patched_v5").isFile ||
+            File(prefix, ".termux_paths_patched_v6").isFile
         if (!hadTree) {
             Log.i(TAG, "Patching Termux bootstrap paths -> $filesRoot")
             patchTree(prefix, replacements)
@@ -44,7 +49,6 @@ object TermuxPathPatch {
         patchLoginMotd(prefix)
         patchLoginExec(prefix)
         TermuxStorageSetup.patchSetupStorageScript(prefix)
-        TermuxAptConfig.applyIfNeeded(context, prefix)
         TermuxElfPathPatch.applyIfNeeded(prefix, elfRoot, filesRoot)
         marker.createNewFile()
         return true
