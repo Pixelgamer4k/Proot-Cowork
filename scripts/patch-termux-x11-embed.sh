@@ -5,8 +5,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LORIE="$ROOT/third_party/termux-x11/app/src/main/java/com/termux/x11/LorieView.java"
 TOUCH="$ROOT/third_party/termux-x11/app/src/main/java/com/termux/x11/input/TouchInputHandler.java"
+CMD="$ROOT/third_party/termux-x11/app/src/main/cpp/lorie/cmdentrypoint.c"
 
-python3 - "$LORIE" "$TOUCH" <<'PY'
+python3 - "$LORIE" "$TOUCH" "$CMD" <<'PY'
 import sys
 from pathlib import Path
 
@@ -101,7 +102,51 @@ def patch_touch(path: Path) -> None:
     text = text.replace(old, new)
     path.write_text(text)
 
+def patch_cmd(path: Path) -> None:
+    text = path.read_text()
+    marker = "COWORK_EMBED_PATCH"
+    if marker in text:
+        return
+
+    old = """    if (!getenv("XKB_CONFIG_ROOT")) {
+        // chroot case
+        const char *root_dir = dirname(getenv("TMPDIR"));
+        char current_path[1024] = {0};
+        snprintf(current_path, sizeof(current_path), "%s/usr/share/X11/xkb", root_dir);
+        if (access(current_path, F_OK) == 0)
+            setenv("XKB_CONFIG_ROOT", current_path, 1);
+    }"""
+    new = """    if (!getenv("XKB_CONFIG_ROOT")) {
+        // embedded Termux prefix (PREFIX=/files/usr)
+        const char *prefix = getenv("PREFIX");
+        if (prefix) {
+            char current_path[1024] = {0};
+            snprintf(current_path, sizeof(current_path), "%s/share/xkeyboard-config-2", prefix);
+            if (access(current_path, F_OK) == 0)
+                setenv("XKB_CONFIG_ROOT", current_path, 1);
+            else {
+                snprintf(current_path, sizeof(current_path), "%s/share/X11/xkb", prefix);
+                if (access(current_path, F_OK) == 0)
+                    setenv("XKB_CONFIG_ROOT", current_path, 1);
+            }
+        }
+    }
+
+    if (!getenv("XKB_CONFIG_ROOT")) {
+        // chroot case (TMPDIR=<prefix>/tmp)
+        const char *root_dir = dirname(getenv("TMPDIR"));
+        char current_path[1024] = {0};
+        snprintf(current_path, sizeof(current_path), "%s/share/X11/xkb", root_dir);
+        if (access(current_path, F_OK) == 0)
+            setenv("XKB_CONFIG_ROOT", current_path, 1);
+    } // COWORK_EMBED_PATCH"""
+    if old not in text:
+        raise SystemExit(f"cmdentrypoint patch target missing in {path}")
+    text = text.replace(old, new)
+    path.write_text(text)
+
 patch_lorie(Path(sys.argv[1]))
 patch_touch(Path(sys.argv[2]))
+patch_cmd(Path(sys.argv[3]))
 print("==> termux-x11 embed patches applied")
 PY

@@ -18,6 +18,9 @@ object TermuxStackSession {
     private val _termuxReady = MutableStateFlow(false)
     val termuxReady: StateFlow<Boolean> = _termuxReady.asStateFlow()
 
+    private val _bootstrapReady = MutableStateFlow(false)
+    val bootstrapReady: StateFlow<Boolean> = _bootstrapReady.asStateFlow()
+
     private val _logLines = MutableStateFlow<List<String>>(emptyList())
     val logLines: StateFlow<List<String>> = _logLines.asStateFlow()
 
@@ -38,6 +41,10 @@ object TermuxStackSession {
 
     fun setTermuxReady(ready: Boolean) {
         _termuxReady.value = ready
+    }
+
+    fun setBootstrapReady(ready: Boolean) {
+        _bootstrapReady.value = ready
     }
 
     fun appendLog(line: String) {

@@ -34,6 +34,16 @@ object X11EmbedController {
         if (serverThread?.isAlive == true) return waitForSocket(context, 5_000)
 
         val prefix = TermuxBootstrap.prefixDir(context)
+        if (!TermuxBootstrap.isInstalled(context)) {
+            Log.w(TAG, "bootstrap not installed yet; deferring X11 server start")
+            return false
+        }
+        val xkbRoot = resolveXkbRoot(prefix)
+        if (xkbRoot == null) {
+            Log.e(TAG, "XKB config missing under ${prefix.absolutePath}")
+            return false
+        }
+
         val tmp = File(prefix, "tmp")
         val x11Unix = File(tmp, ".X11-unix")
         x11Unix.mkdirs()
@@ -47,6 +57,7 @@ object X11EmbedController {
             Os.setenv("TMPDIR", tmp.absolutePath, true)
             Os.setenv("TERMUX_X11_OVERRIDE_PACKAGE", context.packageName, true)
             Os.setenv("PREFIX", prefix.absolutePath, true)
+            Os.setenv("XKB_CONFIG_ROOT", xkbRoot.absolutePath, true)
             if (widthPx > 0 && heightPx > 0) {
                 Os.setenv("XLORIE_WIDTH", widthPx.toString(), true)
                 Os.setenv("XLORIE_HEIGHT", heightPx.toString(), true)
@@ -138,5 +149,15 @@ object X11EmbedController {
                 }
             }
         })
+    }
+
+    private fun resolveXkbRoot(prefix: File): File? {
+        val candidates = listOf(
+            File(prefix, "share/xkeyboard-config-2"),
+            File(prefix, "share/X11/xkb"),
+        )
+        return candidates.firstOrNull { dir ->
+            dir.isDirectory && File(dir, "rules").isDirectory
+        }
     }
 }

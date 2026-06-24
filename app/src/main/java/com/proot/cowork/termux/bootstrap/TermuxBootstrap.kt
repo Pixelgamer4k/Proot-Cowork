@@ -47,6 +47,11 @@ object TermuxBootstrap {
 
     fun bashExecutable(context: Context): File = File(prefixDir(context), "bin/bash")
 
+    fun isInstalled(context: Context): Boolean {
+        val marker = File(prefixDir(context), ".extraction_complete")
+        return marker.isFile && bashExecutable(context).canExecute()
+    }
+
     fun ensureInstalled(context: Context): Boolean {
         val prefix = prefixDir(context)
         val marker = File(prefix, ".extraction_complete")

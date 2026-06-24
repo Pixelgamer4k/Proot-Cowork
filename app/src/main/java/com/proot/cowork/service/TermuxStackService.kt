@@ -68,6 +68,7 @@ class TermuxStackService : Service() {
                 return
             }
             TermuxStackSession.appendLog("Bootstrap ready")
+            TermuxStackSession.setBootstrapReady(true)
 
             val metrics = resources.displayMetrics
             val width = metrics.widthPixels.coerceAtLeast(640)
