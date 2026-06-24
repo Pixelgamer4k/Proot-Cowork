@@ -1,27 +1,29 @@
 #!/usr/bin/env bash
-# Build a full Ubuntu + XFCE proot-distro container (aarch64) for APK bundling.
+# Build proot-distro Ubuntu + XFCE container (aarch64) for Cowork import.
+# Output: proot-cowork-ubuntu.tar.gz (ubuntu/manifest.json + ubuntu/rootfs/)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-MARKER="$ROOT/app/src/main/assets/.ubuntu_xfce_container_v1"
-OUTPUT="$ROOT/app/src/main/assets/ubuntu-xfce-container.tar.gz"
+OUTPUT="${OUTPUT:-$ROOT/dist/proot-cowork-ubuntu.tar.gz}"
 MANIFEST_TEMPLATE="$ROOT/scripts/ubuntu-container-manifest.json"
+FORCE="${FORCE:-0}"
 
-if [[ -f "$MARKER" && -f "$OUTPUT" ]]; then
-  echo "==> Ubuntu XFCE container already built ($MARKER)"
+if [[ "$FORCE" != "1" && -f "$OUTPUT" ]]; then
+  echo "==> Rootfs already exists: $OUTPUT (set FORCE=1 to rebuild)"
   ls -lh "$OUTPUT"
   exit 0
 fi
 
 if ! command -v docker >/dev/null; then
-  echo "docker is required to build the Ubuntu XFCE container" >&2
+  echo "docker is required to build the Ubuntu XFCE rootfs" >&2
   exit 1
 fi
 
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
 
-echo "==> Building Ubuntu 24.04 + full XFCE (arm64) — this takes a while"
+echo "==> Building Ubuntu 24.04 + full XFCE desktop (arm64)"
+echo "    Output: $OUTPUT"
 mkdir -p "$WORKDIR/ubuntu/rootfs"
 cp -a "$ROOT/scripts/ubuntu-container-sysdata/." "$WORKDIR/ubuntu/sysdata/"
 cp "$MANIFEST_TEMPLATE" "$WORKDIR/ubuntu/manifest.json"
@@ -38,10 +40,10 @@ docker cp "$CID:/out/." "$WORKDIR/ubuntu/rootfs/"
 echo "==> Verifying guest rootfs"
 test -f "$WORKDIR/ubuntu/rootfs/usr/bin/bash"
 test -f "$WORKDIR/ubuntu/rootfs/usr/bin/startxfce4" || test -f "$WORKDIR/ubuntu/rootfs/usr/bin/xfce4-session"
+test -f "$WORKDIR/ubuntu/rootfs/usr/share/backgrounds/xfce/xfce-blue.jpg"
 
 mkdir -p "$(dirname "$OUTPUT")"
-echo "==> Packing ubuntu-xfce-container.tar.gz"
+echo "==> Packing $(basename "$OUTPUT")"
 tar -C "$WORKDIR" -czf "$OUTPUT" ubuntu
-touch "$MARKER"
 ls -lh "$OUTPUT"
-echo "==> Ubuntu XFCE container ready"
+echo "==> Rootfs ready for Cowork import: $OUTPUT"

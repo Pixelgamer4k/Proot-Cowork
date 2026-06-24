@@ -19,7 +19,8 @@ secrets.properties
 .DS_Store
 Thumbs.db
 
-# Rootfs (large, user-provided)
+# Rootfs (large, user-provided or CI-built)
+dist/
 *.tar.gz
 files/rootfs/
 files/1/

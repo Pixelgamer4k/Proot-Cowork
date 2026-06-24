@@ -1,0 +1,54 @@
+name: Build Rootfs
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - scripts/ubuntu-xfce-guest-install.sh
+      - scripts/build-ubuntu-xfce-container.sh
+      - scripts/ubuntu-container-manifest.json
+      - scripts/ubuntu-container-sysdata/**
+      - .github/workflows/build-rootfs.yml
+
+jobs:
+  build-rootfs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU for arm64 Docker
+        uses: docker/setup-qemu-action@v3
+
+      - name: Build full Ubuntu + XFCE rootfs
+        run: |
+          bash scripts/build-ubuntu-xfce-container.sh
+        env:
+          OUTPUT: dist/proot-cowork-ubuntu.tar.gz
+          FORCE: "1"
+
+      - name: Rootfs info
+        run: |
+          ls -lh dist/
+          tar -tzf dist/proot-cowork-ubuntu.tar.gz | head -20
+          echo "total entries: $(tar -tzf dist/proot-cowork-ubuntu.tar.gz | wc -l)"
+
+      - name: Upload rootfs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: proot-cowork-ubuntu-rootfs
+          path: dist/proot-cowork-ubuntu.tar.gz
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Summary
+        run: |
+          SIZE=$(du -h dist/proot-cowork-ubuntu.tar.gz | cut -f1)
+          echo "## Rootfs build complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Artifact:** \`proot-cowork-ubuntu-rootfs\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **File:** \`proot-cowork-ubuntu.tar.gz\` ($SIZE)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Import in Cowork:** Choose file or drop into \`Android/data/com.proot/files/\`" >> "$GITHUB_STEP_SUMMARY"
