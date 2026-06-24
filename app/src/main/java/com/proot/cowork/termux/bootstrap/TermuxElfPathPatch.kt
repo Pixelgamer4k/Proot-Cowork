@@ -13,9 +13,11 @@ object TermuxElfPathPatch {
     private const val TAG = "TermuxElfPathPatch"
     private const val LEGACY_ROOT = "/data/data/com.termux/files"
     private const val LEGACY_ROOT_USER = "/data/user/0/com.termux/files"
+    private const val LEGACY_CACHE = "/data/data/com.termux/cache"
+    private const val LEGACY_CACHE_USER = "/data/user/0/com.termux/cache"
 
     /** Patch libapt/apt-key paths baked into libapt-pkg (com.termux -> com.proot). */
-    fun patchLibAptIfNeeded(prefix: File, elfRoot: String, filesRoot: String): Boolean {
+    fun patchLibAptIfNeeded(prefix: File, elfRoot: String, filesRoot: String, cacheRoot: String): Boolean {
         val marker = File(prefix, ".termux_libapt_patched_v1")
         if (marker.isFile) return true
 
@@ -32,6 +34,8 @@ object TermuxElfPathPatch {
         targets.forEach { file ->
             patched += patchFile(file, LEGACY_ROOT, elfRoot)
             patched += patchFile(file, LEGACY_ROOT_USER, filesRoot)
+            patched += patchFile(file, LEGACY_CACHE, cacheRoot)
+            patched += patchFile(file, LEGACY_CACHE_USER, cacheRoot)
         }
         marker.createNewFile()
         Log.i(TAG, "libapt: patched $patched strings in ${targets.size} files (elfRoot=$elfRoot)")
