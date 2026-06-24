@@ -18,6 +18,7 @@ import com.proot.cowork.domain.desktop.TERMUX_STACK_DESKTOP
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
 import android.provider.Settings
+import com.proot.cowork.service.TermuxStackService
 import com.proot.cowork.termux.bootstrap.TermuxBootstrap
 import com.proot.cowork.termux.bootstrap.TermuxStorageSetup
 import com.proot.cowork.ui.ProotCoworkApp

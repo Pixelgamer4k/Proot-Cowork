@@ -68,7 +68,7 @@ object TermuxStorageSetup {
 
 # COWORK_STORAGE_SETUP — embedded Proot-Cowork (no com.termux app broadcast)
 _storage_root="$homePath/storage"
-mkdir -p "$_storage_root"
+mkdir -p "${'$'}_storage_root"
 for _pair in \\
 	"shared:/storage/emulated/0" \\
 	"downloads:/storage/emulated/0/Download" \\
@@ -79,8 +79,8 @@ for _pair in \\
 	"documents:/storage/emulated/0/Documents"; do
 	_name="${'$'}{_pair%%:*}"
 	_target="${'$'}{_pair#*:}"
-	_link="$_storage_root/$_name"
-	[ -e "$_link" ] || ln -sf "$_target" "$_link"
+	_link="${'$'}_storage_root/${'$'}_name"
+	[ -e "${'$'}_link" ] || ln -sf "${'$'}_target" "${'$'}_link"
 done
 echo "Storage symlinks ready under ~/storage."
 exit 0
