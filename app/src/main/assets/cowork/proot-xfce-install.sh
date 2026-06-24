@@ -21,7 +21,7 @@ if command -v apt-get >/dev/null; then
   apt-get install -y \
     xfce4 xfce4-terminal xfce4-goodies xfce4-session \
     dbus dbus-x11 \
-    mesa-utils libgl1-mesa-dri libegl1-mesa libgl1 \
+    mesa-utils libgl1-mesa-dri libglx-mesa0 libegl-mesa0 libgbm1 libgl1 \
     fonts-dejavu fontconfig \
     x11-xserver-utils x11-utils
 elif command -v apk >/dev/null; then
