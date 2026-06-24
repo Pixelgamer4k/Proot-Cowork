@@ -116,6 +116,12 @@ object TermuxBootstrap {
             context.filesDir.absolutePath,
             context.cacheDir.absolutePath,
         )
+        TermuxPythonRepair.applyIfNeeded(
+            context,
+            prefix,
+            elfRoot,
+            context.filesDir.absolutePath,
+        )
         TermuxAptWrapper.installIfNeeded(context, prefix)
         TermuxDpkgRepair.repairIfNeeded(prefix, context.filesDir.absolutePath)
 

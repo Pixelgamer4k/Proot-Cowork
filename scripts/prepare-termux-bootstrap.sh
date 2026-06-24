@@ -5,7 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 JNILIBS="$ROOT/app/src/main/jniLibs/arm64-v8a"
 ASSET="$ROOT/app/src/main/assets/bootstrap.bin"
-MARKER="$ROOT/app/src/main/assets/.bootstrap_prepared_v6"
+MARKER="$ROOT/app/src/main/assets/.bootstrap_prepared_v7"
+PYTHON_ASSET="$ROOT/app/src/main/assets/python-runtime.tar.gz"
 ARCH="aarch64"
 BOOTSTRAP_URL="${TERMUX_BOOTSTRAP_URL:-https://github.com/termux/termux-packages/releases/latest/download/bootstrap-${ARCH}.zip}"
 XKB_DEB_URL="${TERMUX_XKB_DEB_URL:-https://packages-cf.termux.dev/apt/termux-x11/pool/main/x/xkeyboard-config/xkeyboard-config_2.48_all.deb}"
@@ -14,7 +15,7 @@ LIBTALLOC_DEB_URL="${TERMUX_LIBTALLOC_DEB_URL:-https://packages-cf.termux.dev/ap
 LIBSHMEM_DEB_URL="${TERMUX_LIBSHMEM_DEB_URL:-https://packages-cf.termux.dev/apt/termux-main/pool/main/liba/libandroid-shmem/libandroid-shmem_0.7_aarch64.deb}"
 PROOT_ASSET="$ROOT/app/src/main/assets/termux-proot.tar.gz"
 
-if [[ -f "$MARKER" && -f "$ASSET" && -f "$JNILIBS/libbash.so" && -f "$PROOT_ASSET" ]]; then
+if [[ -f "$MARKER" && -f "$ASSET" && -f "$PYTHON_ASSET" && -f "$JNILIBS/libbash.so" && -f "$PROOT_ASSET" ]]; then
   echo "==> Termux bootstrap already prepared ($MARKER)"
   ls -lh "$ASSET" "$JNILIBS/libbash.so"
   exit 0
@@ -72,8 +73,14 @@ cp "$bash_src" "$JNILIBS/libbash.so"
 chmod +x "$JNILIBS/libbash.so"
 rm -f "$tmpdir/prefix/bin/bash"
 
+echo "==> Packing clean python runtime for on-device repair"
+mkdir -p "$tmpdir/python-runtime/lib" "$tmpdir/python-runtime/bin"
+cp -a "$tmpdir/prefix/lib/libpython3.13.so" "$tmpdir/prefix/lib/libpython3.so" "$tmpdir/python-runtime/lib/"
+cp -a "$tmpdir/prefix/bin/python3.13" "$tmpdir/prefix/bin/python3" "$tmpdir/python-runtime/bin/"
+cp -a "$tmpdir/prefix/lib/python3.13" "$tmpdir/python-runtime/lib/"
 mkdir -p "$(dirname "$ASSET")"
+tar -czf "$PYTHON_ASSET" -C "$tmpdir/python-runtime" .
 tar -czf "$ASSET" -C "$tmpdir/prefix" .
 touch "$MARKER"
-echo "==> Wrote $ASSET (with XKB + proot + X11 clients), $PROOT_ASSET, and $JNILIBS/libbash.so"
-ls -lh "$ASSET" "$PROOT_ASSET" "$JNILIBS/libbash.so"
+echo "==> Wrote $ASSET, $PYTHON_ASSET (with XKB + proot + X11 clients), $PROOT_ASSET, and $JNILIBS/libbash.so"
+ls -lh "$ASSET" "$PYTHON_ASSET" "$PROOT_ASSET" "$JNILIBS/libbash.so"

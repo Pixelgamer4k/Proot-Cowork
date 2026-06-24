@@ -7,6 +7,9 @@ import java.io.RandomAccessFile
 /**
  * Patches null-terminated path strings in ELF binaries when the replacement fits in-place.
  * libapt is patched separately via [patchLibAptIfNeeded] using only the shorter elfRoot path.
+ *
+ * [libpython] must never use prefix-based patching: frozen stdlib blobs inside the .so can
+ * contain accidental `/data/data/com.termux/files` byte sequences. Use [patchPythonRuntime] instead.
  */
 object TermuxElfPathPatch {
 
@@ -15,6 +18,9 @@ object TermuxElfPathPatch {
     private const val LEGACY_ROOT_USER = "/data/user/0/com.termux/files"
     private const val LEGACY_CACHE = "/data/data/com.termux/cache"
     private const val LEGACY_CACHE_USER = "/data/user/0/com.termux/cache"
+
+    private fun isPythonRuntimeBinary(name: String): Boolean =
+        name == "python3.13" || name == "python3" || name.startsWith("libpython")
 
     /** Patch libapt/apt-key paths baked into libapt-pkg (com.termux -> com.proot). */
     fun patchLibAptIfNeeded(prefix: File, elfRoot: String, filesRoot: String, cacheRoot: String): Boolean {
@@ -58,8 +64,9 @@ object TermuxElfPathPatch {
     }
 
     fun applyIfNeeded(prefix: File, elfRoot: String, filesRoot: String): Boolean {
-        val marker = File(prefix, ".termux_elf_patched_v3")
+        val marker = File(prefix, ".termux_elf_patched_v4")
         if (marker.isFile) return true
+        File(prefix, ".termux_elf_patched_v3").delete()
 
         var patched = 0
         val roots = listOf(
@@ -76,15 +83,53 @@ object TermuxElfPathPatch {
                 if (!file.isFile) return@forEach
                 if (file.name.startsWith("libapt")) return@forEach
                 if (file.name == "apt" || file.name == "apt.real") return@forEach
+                if (isPythonRuntimeBinary(file.name)) return@forEach
                 if (!file.name.endsWith(".so") && !isElf(file)) return@forEach
                 replacements.forEach { (from, to) ->
                     patched += patchFile(file, from, to)
                 }
             }
         }
-        Log.i(TAG, "patched $patched ELF strings under ${prefix.absolutePath} (elfRoot=$elfRoot)")
+        val pythonPatched = patchPythonRuntime(prefix, elfRoot, filesRoot)
+        Log.i(
+            TAG,
+            "patched $patched ELF strings + $pythonPatched python paths under ${prefix.absolutePath}",
+        )
         marker.createNewFile()
         return true
+    }
+
+    /** Only replace full known path strings in python ELFs (never prefix-match inside libpython). */
+    fun patchPythonRuntime(prefix: File, elfRoot: String, filesRoot: String): Int {
+        val homeRoot = File(filesRoot, "home").absolutePath
+        val exact = listOf(
+            "$LEGACY_ROOT/usr/lib:$LEGACY_ROOT/usr/lib" to "$elfRoot/usr/lib:$elfRoot/usr/lib",
+            "$LEGACY_ROOT/usr/lib" to "$elfRoot/usr/lib",
+            "$LEGACY_ROOT/usr" to "$elfRoot/usr",
+            "$LEGACY_ROOT/home" to homeRoot,
+            "$LEGACY_ROOT/usr/bin/bash" to "$elfRoot/usr/bin/bash",
+            "$LEGACY_ROOT/usr/bin/login" to "$elfRoot/usr/bin/login",
+            "$LEGACY_ROOT_USER/usr/lib:$LEGACY_ROOT_USER/usr/lib" to "$filesRoot/usr/lib:$filesRoot/usr/lib",
+            "$LEGACY_ROOT_USER/usr/lib" to "$filesRoot/usr/lib",
+            "$LEGACY_ROOT_USER/usr" to "$filesRoot/usr",
+            "$LEGACY_ROOT_USER/home" to homeRoot,
+            "$LEGACY_ROOT_USER/usr/bin/bash" to "$filesRoot/usr/bin/bash",
+            "$LEGACY_ROOT_USER/usr/bin/login" to "$filesRoot/usr/bin/login",
+        )
+        val targets = listOf(
+            File(prefix, "lib/libpython3.13.so"),
+            File(prefix, "lib/libpython3.so"),
+            File(prefix, "bin/python3.13"),
+            File(prefix, "bin/python3"),
+        )
+        var patched = 0
+        targets.filter { it.isFile }.forEach { file ->
+            patched += patchExactStrings(file, exact)
+        }
+        if (patched > 0) {
+            Log.i(TAG, "python runtime: patched $patched exact path strings")
+        }
+        return patched
     }
 
     private fun isElf(file: File): Boolean {
@@ -98,6 +143,42 @@ object TermuxElfPathPatch {
         } catch (_: Exception) {
             false
         }
+    }
+
+    private fun patchExactStrings(file: File, replacements: List<Pair<String, String>>): Int {
+        val bytes = try {
+            file.readBytes()
+        } catch (_: Exception) {
+            return 0
+        }
+        var count = 0
+        var idx = 0
+        while (idx < bytes.size) {
+            var end = idx
+            while (end < bytes.size && bytes[end] != 0.toByte()) end++
+            if (end == idx) {
+                idx++
+                continue
+            }
+            val slot = bytes.copyOfRange(idx, end).toString(Charsets.US_ASCII)
+            val replacement = replacements.find { it.first == slot }?.second
+            if (replacement != null) {
+                val newBytes = replacement.toByteArray(Charsets.US_ASCII)
+                val slotLen = end - idx
+                if (newBytes.size <= slotLen) {
+                    System.arraycopy(newBytes, 0, bytes, idx, newBytes.size)
+                    for (i in newBytes.size until slotLen) {
+                        bytes[idx + i] = 0
+                    }
+                    count++
+                }
+            }
+            idx = end + 1
+        }
+        if (count > 0) {
+            file.writeBytes(bytes)
+        }
+        return count
     }
 
     private fun patchFile(file: File, legacy: String, replacement: String): Int {
