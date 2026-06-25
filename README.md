@@ -55,7 +55,12 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/RESEARCH.md](docs/RES
 
 ## Rootfs Setup
 
-Build a custom proot-distro rootfs on Termux using scripts in `rootfs-setup/`, then export and import into the app. No extra commands needed after import — the desktop auto-starts.
+Two options:
+
+1. **Manual on-device (Termux)** — step-by-step commands, no CI: **[docs/TERMUX-MANUAL-ROOTFS.md](docs/TERMUX-MANUAL-ROOTFS.md)**
+2. **GitHub Actions** — `gh workflow run build-rootfs.yml` → artifact `proot-cowork-ubuntu-rootfs`
+
+Script shortcuts for repeat builds: [rootfs-setup/README.md](rootfs-setup/README.md)
 
 ## License
 
