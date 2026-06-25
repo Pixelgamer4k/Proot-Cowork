@@ -82,7 +82,7 @@ class HomeViewModel(
                         },
                         swarmTasks = snap.swarmTasks.ifEmpty { local.swarmTasks },
                         agentStates = snap.agentStates,
-                        isExecuting = snap.isRunning || local.isExecuting,
+                        isExecuting = snap.isRunning || (chatJob?.isActive == true),
                     )
                 }
             }
