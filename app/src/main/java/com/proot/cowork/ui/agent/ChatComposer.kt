@@ -63,6 +63,7 @@ fun ChatComposer(
     onSend: () -> Unit,
     onStop: () -> Unit,
     isExecuting: Boolean,
+    isApiConfigured: Boolean,
     executionMode: ExecutionMode,
     onModeChange: (ExecutionMode) -> Unit,
     onFocusChange: (Boolean) -> Unit,
@@ -74,7 +75,7 @@ fun ChatComposer(
 
     LaunchedEffect(isFocused) { onFocusChange(isFocused) }
 
-    val canSend = value.isNotBlank() && !isExecuting
+    val canSend = value.isNotBlank() && !isExecuting && isApiConfigured
     val borderColor = if (isFocused) CoworkTokens.Mint.copy(alpha = 0.5f) else CoworkTokens.Border
 
     val modeLabel = when (executionMode) {
@@ -107,7 +108,11 @@ fun ChatComposer(
             modifier = Modifier.fillMaxWidth(),
             placeholder = {
                 Text(
-                    text = if (isExecuting) "Agent running…" else stringResource(R.string.agent_hint_focused),
+                    text = when {
+                        !isApiConfigured -> stringResource(R.string.agent_api_required)
+                        isExecuting -> stringResource(R.string.agent_working)
+                        else -> stringResource(R.string.agent_hint_focused)
+                    },
                     color = CoworkTokens.TextMuted,
                 )
             },

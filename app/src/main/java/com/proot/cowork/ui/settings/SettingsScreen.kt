@@ -25,6 +25,8 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -69,6 +71,13 @@ fun SettingsScreen(
         uiState.savedMessage?.let { snackbarHostState.showSnackbar(it); viewModel.clearSavedMessage() }
     }
 
+    LaunchedEffect(uiState.connectionTestMessage) {
+        uiState.connectionTestMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearConnectionTestMessage()
+        }
+    }
+
     Scaffold(
         containerColor = CoworkTokens.Bg,
         topBar = {
@@ -100,12 +109,32 @@ fun SettingsScreen(
                 Spacer(Modifier.height(12.dp))
                 SettingsField(stringResource(R.string.model_name), uiState.model, viewModel::onModelChange)
                 Spacer(Modifier.height(16.dp))
-                Button(
-                    onClick = viewModel::save,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = CoworkTokens.ShapeCard,
-                    colors = ButtonDefaults.buttonColors(containerColor = CoworkTokens.Mint, contentColor = CoworkTokens.SpeakFg),
-                ) { Text(stringResource(R.string.save), fontWeight = FontWeight.SemiBold) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = viewModel::save,
+                        modifier = Modifier.weight(1f),
+                        shape = CoworkTokens.ShapeCard,
+                        colors = ButtonDefaults.buttonColors(containerColor = CoworkTokens.Mint, contentColor = CoworkTokens.SpeakFg),
+                    ) { Text(stringResource(R.string.save), fontWeight = FontWeight.SemiBold) }
+                    OutlinedButton(
+                        onClick = viewModel::testConnection,
+                        enabled = !uiState.isTestingConnection,
+                        modifier = Modifier.weight(1f),
+                        shape = CoworkTokens.ShapeCard,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, CoworkTokens.Mint),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = CoworkTokens.Mint),
+                    ) {
+                        if (uiState.isTestingConnection) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = CoworkTokens.Mint,
+                            )
+                        } else {
+                            Text(stringResource(R.string.test_connection), fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
             }
 
             SettingsSectionHeader(Icons.Default.Storage, stringResource(R.string.settings_rootfs_section))

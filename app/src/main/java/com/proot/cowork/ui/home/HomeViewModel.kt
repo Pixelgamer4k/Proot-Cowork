@@ -4,14 +4,15 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.proot.cowork.data.llm.LlmEndpoint
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.prootcontainer.ProotContainerRepository
 import com.proot.cowork.data.rootfs.ImportResult
 import com.proot.cowork.data.rootfs.RootfsRepository
 import com.proot.cowork.domain.agent.AgentMessage
+import com.proot.cowork.domain.agent.CoworkKoogAgentRunner
 import com.proot.cowork.domain.agent.ExecutionMode
 import com.proot.cowork.domain.agent.MessageRole
-import com.proot.cowork.domain.agent.SwarmTask
 import com.proot.cowork.domain.desktop.TERMUX_STACK_DESKTOP
 import com.proot.cowork.domain.importing.ImportPhase
 import com.proot.cowork.domain.importing.ImportSession
@@ -19,10 +20,12 @@ import com.proot.cowork.domain.importing.ImportUiState
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
 import com.proot.cowork.domain.vnc.VncSession
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -34,12 +37,14 @@ data class HomeUiState(
     val distroName: String = "",
     val desktopLogHint: String? = null,
     val messages: List<AgentMessage> = emptyList(),
-    val swarmTasks: List<SwarmTask> = emptyList(),
+    val swarmTasks: List<com.proot.cowork.domain.agent.SwarmTask> = emptyList(),
     val executionMode: ExecutionMode = ExecutionMode.SWARM,
     val inputText: String = "",
     val isExecuting: Boolean = false,
     val importError: String? = null,
     val isImportBusy: Boolean = false,
+    val isApiConfigured: Boolean = false,
+    val chatError: String? = null,
 )
 
 class HomeViewModel(
@@ -49,18 +54,21 @@ class HomeViewModel(
 ) : ViewModel() {
 
     private val localState = MutableStateFlow(HomeUiState())
+    private var chatJob: Job? = null
 
     val uiState: StateFlow<HomeUiState> = combine(
         settingsRepository.rootfsState,
+        settingsRepository.llmConfig,
         ImportSession.state,
         DesktopSession.state,
         DesktopSession.logLines,
         localState,
-    ) { rootfs, import, desktop, logs, local ->
+    ) { rootfs, llm, import, desktop, logs, local ->
         local.copy(
             desktopState = resolveDesktopState(rootfs.isInstalled, rootfs.isImporting, import, desktop),
             importUiState = import,
             distroName = rootfs.distroName,
+            isApiConfigured = LlmEndpoint.isConfigured(llm),
             desktopLogHint = if (desktop == DesktopState.STOPPED) {
                 logs.lastOrNull(::looksLikeDesktopError) ?: logs.lastOrNull()
             } else {
@@ -85,6 +93,10 @@ class HomeViewModel(
 
     fun clearImportError() {
         localState.update { it.copy(importError = null) }
+    }
+
+    fun clearChatError() {
+        localState.update { it.copy(chatError = null) }
     }
 
     fun importFromUri(uri: Uri) {
@@ -173,6 +185,8 @@ class HomeViewModel(
     }
 
     fun onStop() {
+        chatJob?.cancel()
+        chatJob = null
         localState.update { it.copy(isExecuting = false) }
     }
 
@@ -180,64 +194,86 @@ class HomeViewModel(
         val text = localState.value.inputText.trim()
         if (text.isEmpty() || localState.value.isExecuting) return
 
-        viewModelScope.launch {
+        chatJob?.cancel()
+        chatJob = viewModelScope.launch {
+            val config = settingsRepository.llmConfig.first()
+            if (!LlmEndpoint.isConfigured(config)) {
+                localState.update {
+                    it.copy(chatError = "Add your API key, base URL, and model in Settings before chatting.")
+                }
+                return@launch
+            }
+
             val userMsg = AgentMessage(
                 id = UUID.randomUUID().toString(),
                 role = MessageRole.USER,
                 content = text,
             )
+            val assistantId = UUID.randomUUID().toString()
+            val assistantPlaceholder = AgentMessage(
+                id = assistantId,
+                role = MessageRole.ASSISTANT,
+                content = "",
+            )
+
             localState.update {
                 it.copy(
                     inputText = "",
                     isExecuting = true,
-                    messages = it.messages + userMsg,
+                    chatError = null,
+                    messages = it.messages + userMsg + assistantPlaceholder,
+                    swarmTasks = emptyList(),
                 )
             }
 
             val mode = localState.value.executionMode
-            val response = when (mode) {
-                ExecutionMode.SWARM -> buildSwarmResponse(text)
-                ExecutionMode.FAST -> "Fast execution: \"$text\"\n\n(Phase 3: single Koog agent will run tools in proot)"
-            }
+            val historyBeforeAssistant = localState.value.messages.dropLast(1)
 
-            localState.update {
-                it.copy(
-                    isExecuting = false,
-                    messages = it.messages + AgentMessage(
-                        id = UUID.randomUUID().toString(),
-                        role = MessageRole.ASSISTANT,
-                        content = response,
-                    ),
-                    swarmTasks = if (mode == ExecutionMode.SWARM) demoSwarmTasks(text) else emptyList(),
-                )
+            try {
+                val response = CoworkKoogAgentRunner.streamChat(
+                    config = config,
+                    mode = mode,
+                    history = historyBeforeAssistant,
+                    userMessage = text,
+                    isActive = { chatJob?.isActive == true },
+                ) { delta ->
+                    localState.update { state ->
+                        state.copy(
+                            messages = state.messages.map { msg ->
+                                if (msg.id == assistantId) msg.copy(content = msg.content + delta) else msg
+                            },
+                        )
+                    }
+                }
+
+                val finalText = response.ifBlank {
+                    localState.value.messages.lastOrNull { it.id == assistantId }?.content.orEmpty()
+                }
+
+                localState.update { state ->
+                    state.copy(
+                        isExecuting = false,
+                        messages = state.messages.map { msg ->
+                            if (msg.id == assistantId) msg.copy(content = finalText.ifBlank { "No response from model." }) else msg
+                        },
+                        swarmTasks = if (mode == ExecutionMode.SWARM) {
+                            CoworkKoogAgentRunner.parseSwarmTasks(finalText, text)
+                        } else {
+                            emptyList()
+                        },
+                    )
+                }
+            } catch (e: Exception) {
+                localState.update { state ->
+                    state.copy(
+                        isExecuting = false,
+                        chatError = e.message ?: "Chat request failed",
+                        messages = state.messages.filterNot { it.id == assistantId && it.content.isBlank() },
+                    )
+                }
             }
         }
     }
-
-    private fun buildSwarmResponse(task: String): String {
-        return """
-            |## Plan for: $task
-            |
-            |1. **Analyze** — understand requirements and constraints
-            |2. **Decompose** — split into parallel subtasks for swarm agents
-            |3. **Execute** — run in proot desktop (shell, files, browser tools)
-            |4. **Verify** — check outputs and capture screenshot
-            |5. **Learn** — offer to save workflow as SKILL.md
-            |
-            |Tap **Execute** to approve this plan, or edit your request.
-            |(Phase 3: real LLM planning via Koog + OpenRouter)
-        """.trimMargin()
-    }
-
-    private fun demoSwarmTasks(task: String): List<SwarmTask> = listOf(
-        SwarmTask("1", "Analyze: $task"),
-        SwarmTask("2", "Prepare proot environment"),
-        SwarmTask("3", "Execute subtasks in parallel", children = listOf(
-            SwarmTask("3a", "Shell commands"),
-            SwarmTask("3b", "File operations"),
-        )),
-        SwarmTask("4", "Verify and report"),
-    )
 
     fun onQuickPrompt(prompt: String) {
         onInputChange(prompt)

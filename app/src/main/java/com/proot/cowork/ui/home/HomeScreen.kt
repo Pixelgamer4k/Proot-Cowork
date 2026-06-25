@@ -80,6 +80,10 @@ fun HomeScreen(
         uiState.importError?.let { snackbarHostState.showSnackbar(it); viewModel.clearImportError() }
     }
 
+    LaunchedEffect(uiState.chatError) {
+        uiState.chatError?.let { snackbarHostState.showSnackbar(it); viewModel.clearChatError() }
+    }
+
     val composerBottomPadding = with(density) { composerHeightPx.toDp() }
     val showChatComposer = selectedTab == CoworkTab.Chat && uiState.desktopState != DesktopState.IMPORTING
     val terminalLogs = remember(stackLogs, desktopLogs) { (stackLogs + desktopLogs).takeLast(120) }
@@ -131,6 +135,7 @@ fun HomeScreen(
                         messages = uiState.messages,
                         swarmTasks = uiState.swarmTasks,
                         isExecuting = uiState.isExecuting,
+                        isApiConfigured = uiState.isApiConfigured,
                         composerBottomPadding = if (showChatComposer) composerBottomPadding + 8.dp else 0.dp,
                         onQuickPrompt = viewModel::onQuickPrompt,
                     )
@@ -155,6 +160,7 @@ fun HomeScreen(
                     onSend = viewModel::onSend,
                     onStop = viewModel::onStop,
                     isExecuting = uiState.isExecuting,
+                    isApiConfigured = uiState.isApiConfigured,
                     executionMode = uiState.executionMode,
                     onModeChange = viewModel::onModeChange,
                     onFocusChange = { },

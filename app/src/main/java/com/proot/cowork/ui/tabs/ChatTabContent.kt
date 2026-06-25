@@ -48,6 +48,7 @@ fun ChatTabContent(
     messages: List<AgentMessage>,
     swarmTasks: List<SwarmTask>,
     isExecuting: Boolean,
+    isApiConfigured: Boolean,
     composerBottomPadding: androidx.compose.ui.unit.Dp,
     onQuickPrompt: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -84,7 +85,14 @@ fun ChatTabContent(
                     Spacer(modifier = Modifier.size(12.dp))
                     Text(stringResource(R.string.agent_empty_title), fontWeight = FontWeight.SemiBold, color = CoworkTokens.TextPrimary)
                     Spacer(modifier = Modifier.size(6.dp))
-                    Text(stringResource(R.string.agent_empty_hint), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                    Text(
+                        if (isApiConfigured) {
+                            stringResource(R.string.agent_empty_hint)
+                        } else {
+                            stringResource(R.string.agent_api_required)
+                        },
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                    )
                     Spacer(modifier = Modifier.size(14.dp))
                     Column(
                         modifier = Modifier.fillMaxWidth(),

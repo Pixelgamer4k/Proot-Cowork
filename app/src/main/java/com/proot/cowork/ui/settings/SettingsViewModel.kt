@@ -3,7 +3,9 @@ package com.proot.cowork.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.proot.cowork.data.prefs.LlmConfig
 import com.proot.cowork.data.prefs.SettingsRepository
+import com.proot.cowork.domain.agent.CoworkKoogAgentRunner
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +19,8 @@ data class SettingsUiState(
     val apiKey: String = "",
     val model: String = "",
     val savedMessage: String? = null,
+    val isTestingConnection: Boolean = false,
+    val connectionTestMessage: String? = null,
 )
 
 class SettingsViewModel(
@@ -24,20 +28,25 @@ class SettingsViewModel(
 ) : ViewModel() {
 
     private val formState = MutableStateFlow(Triple("", "", ""))
-
     private val savedMessage = MutableStateFlow<String?>(null)
+    private val connectionTestMessage = MutableStateFlow<String?>(null)
+    private val isTestingConnection = MutableStateFlow(false)
 
     val uiState: StateFlow<SettingsUiState> = combine(
         settingsRepository.llmConfig,
         formState,
         savedMessage,
-    ) { config, form, message ->
+        connectionTestMessage,
+        isTestingConnection,
+    ) { config, form, message, testMessage, testing ->
         val (url, key, model) = form
         SettingsUiState(
             baseUrl = url.ifEmpty { config.baseUrl },
             apiKey = key.ifEmpty { config.apiKey },
             model = model.ifEmpty { config.model },
             savedMessage = message,
+            connectionTestMessage = testMessage,
+            isTestingConnection = testing,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsUiState())
 
@@ -62,8 +71,32 @@ class SettingsViewModel(
         }
     }
 
+    fun testConnection() {
+        viewModelScope.launch {
+            val state = uiState.value
+            isTestingConnection.value = true
+            connectionTestMessage.value = null
+            val result = CoworkKoogAgentRunner.testConnection(
+                LlmConfig(
+                    baseUrl = state.baseUrl,
+                    apiKey = state.apiKey,
+                    model = state.model,
+                ),
+            )
+            connectionTestMessage.value = result.fold(
+                onSuccess = { it },
+                onFailure = { "Connection failed: ${it.message}" },
+            )
+            isTestingConnection.value = false
+        }
+    }
+
     fun clearSavedMessage() {
         savedMessage.value = null
+    }
+
+    fun clearConnectionTestMessage() {
+        connectionTestMessage.value = null
     }
 
     companion object {
