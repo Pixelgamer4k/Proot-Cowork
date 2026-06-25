@@ -64,6 +64,16 @@ android {
     }
 }
 
+// Koog publishes Android + JVM variants; prefer JVM artifacts so minSdk 26 is preserved.
+configurations.configureEach {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "ai.koog" && requested.name.endsWith("-android")) {
+            useTarget("${requested.group}:${requested.name.replace("-android", "-jvm")}:${requested.version}")
+            because("Use JVM Koog artifacts on Android (Android variants require minSdk 35)")
+        }
+    }
+}
+
 androidComponents {
     beforeVariants(selector().withBuildType("debug")) { variantBuilder ->
         variantBuilder.targetSdk = 28
@@ -93,7 +103,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
-    implementation("ai.koog:koog-agents-jvm:1.0.0")
+    implementation("ai.koog:agents-core-jvm:1.0.0")
+    implementation("ai.koog:agents-features-event-handler-jvm:1.0.0")
+    implementation("ai.koog:prompt-executor-openai-client-jvm:1.0.0")
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
 

@@ -1,8 +1,8 @@
 package com.proot.cowork.domain.agent
 
 import ai.koog.agents.core.agent.AIAgent
-import ai.koog.agents.core.agent.feature.EventHandler
 import ai.koog.agents.core.dsl.builder.strategy.streamingStrategy
+import ai.koog.agents.features.eventHandler.feature.handleEvents
 import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
 import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.llms.SingleLLMPromptExecutor
@@ -48,15 +48,15 @@ object CoworkKoogAgentRunner {
                     id = config.model.trim(),
                     capabilities = listOf(LLMCapability.Temperature),
                 )
-                val agent = AIAgent.builder<String, String>()
-                    .promptExecutor(executor)
-                    .systemPrompt(systemPrompt)
-                    .llmModel(model)
-                    .temperature(temperature)
-                    .maxIterations(8)
-                    .strategy(streamingStrategy())
-                    .install(EventHandler) { handler ->
-                        handler.onLLMStreamingFrameReceived { context ->
+                val agent = AIAgent(
+                    promptExecutor = executor,
+                    llmModel = model,
+                    strategy = streamingStrategy(),
+                    systemPrompt = systemPrompt,
+                    maxIterations = 8,
+                ) {
+                    handleEvents {
+                        onLLMStreamingFrameReceived { context ->
                             if (!isActive()) return@onLLMStreamingFrameReceived
                             when (val frame = context.streamFrame) {
                                 is StreamFrame.TextDelta -> {
@@ -67,7 +67,7 @@ object CoworkKoogAgentRunner {
                             }
                         }
                     }
-                    .build()
+                }
 
                 agent.use { runningAgent ->
                     val result = runningAgent.run(userMessage)
