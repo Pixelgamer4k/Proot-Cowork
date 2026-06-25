@@ -54,12 +54,18 @@ class MainActivity : ComponentActivity() {
                     com.termux.x11.MainActivity.prefs =
                         com.termux.x11.Prefs(applicationContext)
                 }
-                requestTermuxStorageAccess()
                 val svc = Intent(this@MainActivity, TermuxStackService::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     startForegroundService(svc)
                 } else {
                     startService(svc)
+                }
+                if (TermuxStorageSetup.hasStorageAccess(this@MainActivity)) {
+                    runBootstrapAndRepair()
+                } else {
+                    // Let Compose render before opening system settings.
+                    kotlinx.coroutines.delay(400)
+                    requestTermuxStorageAccess()
                 }
                 return@launch
             }
@@ -79,12 +85,18 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (TERMUX_STACK_DESKTOP && TermuxStorageSetup.hasStorageAccess(this)) {
-            val app = application as ProotCoworkApp
-            TermuxBootstrap.ensureInstalled(applicationContext)
             lifecycleScope.launch {
-                app.prootContainerRepository.repairStateOnStartup()
+                runBootstrapAndRepair()
             }
         }
+    }
+
+    private suspend fun runBootstrapAndRepair() {
+        val app = application as ProotCoworkApp
+        withContext(Dispatchers.IO) {
+            TermuxBootstrap.ensureInstalled(applicationContext)
+        }
+        app.prootContainerRepository.repairStateOnStartup()
     }
 
     private fun requestTermuxStorageAccess() {

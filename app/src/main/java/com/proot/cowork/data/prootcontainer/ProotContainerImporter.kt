@@ -127,6 +127,16 @@ class ProotContainerImporter(private val context: Context) {
                                         Paths.get(entry.linkName),
                                     )
                                 }
+                                entry.isLink -> {
+                                    outFile.parentFile?.mkdirs()
+                                    val linkSource = File(partialDir, entry.linkName.removePrefix("./").removePrefix("/"))
+                                    if (linkSource.isFile) {
+                                        linkSource.copyTo(outFile, overwrite = true)
+                                        applyTarMode(outFile, entry.mode)
+                                    } else {
+                                        bytesRead += extractFile(tar, outFile, entry)
+                                    }
+                                }
                                 else -> {
                                     outFile.parentFile?.mkdirs()
                                     bytesRead += extractFile(tar, outFile, entry)
@@ -201,20 +211,14 @@ class ProotContainerImporter(private val context: Context) {
         when {
             packaged != null -> {
                 if (dest.exists()) dest.deleteRecursively()
-                packaged.renameTo(dest) || run {
-                    copyDirectory(packaged, dest)
-                    packaged.deleteRecursively()
-                }
+                moveDirectoryPreservingSymlinks(packaged, dest)
             }
             File(partialDir, "usr/bin/bash").isFile -> {
                 if (dest.exists()) dest.deleteRecursively()
                 val rootfs = File(dest, "rootfs").also { it.mkdirs() }
                 partialDir.listFiles()?.forEach { entry ->
                     val target = File(rootfs, entry.name)
-                    entry.renameTo(target) || run {
-                        if (entry.isDirectory) copyDirectory(entry, target) else entry.copyTo(target, true)
-                        true
-                    }
+                    moveEntryPreservingSymlinks(entry, target)
                 }
                 writeDefaultManifest(dest)
             }
@@ -242,17 +246,54 @@ class ProotContainerImporter(private val context: Context) {
         }
     }
 
-    private fun copyDirectory(source: File, dest: File) {
+    private fun moveEntryPreservingSymlinks(source: File, dest: File) {
+        if (source.renameTo(dest)) return
+        if (source.isDirectory) {
+            moveDirectoryPreservingSymlinks(source, dest)
+        } else {
+            copyFilePreservingSymlinks(source, dest)
+            source.delete()
+        }
+    }
+
+    private fun moveDirectoryPreservingSymlinks(source: File, dest: File) {
+        if (source.renameTo(dest)) return
+        copyDirectoryPreservingSymlinks(source, dest)
+        source.deleteRecursively()
+    }
+
+    private fun copyDirectoryPreservingSymlinks(source: File, dest: File) {
         if (!dest.exists() && !dest.mkdirs()) {
             throw IllegalStateException("Failed to create $dest")
         }
         source.listFiles()?.forEach { entry ->
             val target = File(dest, entry.name)
             when {
-                entry.isDirectory -> copyDirectory(entry, target)
+                Files.isSymbolicLink(entry.toPath()) -> {
+                    if (target.exists()) target.delete()
+                    Files.createSymbolicLink(target.toPath(), Files.readSymbolicLink(entry.toPath()))
+                }
+                entry.isDirectory -> copyDirectoryPreservingSymlinks(entry, target)
                 else -> entry.copyTo(target, overwrite = true)
             }
         }
+    }
+
+    private fun copyFilePreservingSymlinks(source: File, dest: File) {
+        val path = source.toPath()
+        if (Files.isSymbolicLink(path)) {
+            dest.parentFile?.mkdirs()
+            if (dest.exists()) dest.delete()
+            Files.createSymbolicLink(dest.toPath(), Files.readSymbolicLink(path))
+        } else {
+            source.copyTo(dest, overwrite = true)
+        }
+    }
+
+    private fun applyTarMode(file: File, mode: Int) {
+        if (mode and 64 != 0) file.setExecutable(true, false)
+        if (mode and 128 != 0) file.setReadable(true, false)
+        if (mode and 1 != 0) file.setWritable(true, false)
     }
 
     private fun extractFile(tar: TarArchiveInputStream, outFile: File, entry: TarArchiveEntry): Long {
@@ -267,9 +308,7 @@ class ProotContainerImporter(private val context: Context) {
             }
         }
         val mode = entry.mode
-        if (mode and 64 != 0) outFile.setExecutable(true, false)
-        if (mode and 128 != 0) outFile.setReadable(true, false)
-        if (mode and 1 != 0) outFile.setWritable(true, false)
+        applyTarMode(outFile, mode)
         return bytesRead
     }
 }

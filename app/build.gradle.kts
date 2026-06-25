@@ -12,8 +12,8 @@ android {
         applicationId = "com.proot"
         minSdk = 26
         targetSdk = 35
-        versionCode = 53
-        versionName = "0.11.5-x11-mouse-touch"
+        versionCode = 54
+        versionName = "0.11.6-import-fix"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
