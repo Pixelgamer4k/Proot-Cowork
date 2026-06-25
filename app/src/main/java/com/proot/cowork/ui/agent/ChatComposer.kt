@@ -120,8 +120,8 @@ fun ChatComposer(
         AnimatedContent(
             targetState = isExecuting,
             transitionSpec = {
-                (fadeIn(Motion.tweenQuick) + scaleIn(Motion.springBouncy, initialScale = 0.85f))
-                    .togetherWith(fadeOut(Motion.tweenQuick) + scaleOut(initialScale = 0.85f))
+                (fadeIn(Motion.tweenQuick) + scaleIn(Motion.springBouncy))
+                    .togetherWith(fadeOut(Motion.tweenQuick) + scaleOut())
             },
             label = "composerTrailing",
         ) { sending ->
