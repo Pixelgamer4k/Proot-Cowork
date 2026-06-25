@@ -58,13 +58,13 @@ class AgentExecutionService : Service() {
                 val planJson = intent.getStringExtra(EXTRA_PLAN_JSON) ?: return START_NOT_STICKY
                 val historyJson = intent.getStringExtra(EXTRA_HISTORY_JSON).orEmpty()
                 val maxPool = intent.getIntExtra(EXTRA_MAX_POOL, DEFAULT_MAX_AGENT_POOL)
-                startForeground(buildNotification("Swarm executing…"))
+                beginForeground("Swarm executing…")
                 executeSwarm(parsePlan(planJson), parseHistory(historyJson), maxPool)
             }
             ACTION_EXECUTE_FAST -> {
                 val task = intent.getStringExtra(EXTRA_USER_TASK) ?: return START_NOT_STICKY
                 val historyJson = intent.getStringExtra(EXTRA_HISTORY_JSON).orEmpty()
-                startForeground(buildNotification("Fast agent running…"))
+                beginForeground("Fast agent running…")
                 executeFast(task, parseHistory(historyJson))
             }
         }
@@ -170,7 +170,7 @@ class AgentExecutionService : Service() {
         }
     }
 
-    private fun startForeground(text: String) {
+    private fun beginForeground(text: String) {
         val notification = buildNotification(text)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)

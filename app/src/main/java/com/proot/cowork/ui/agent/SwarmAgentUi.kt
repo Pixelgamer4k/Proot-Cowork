@@ -167,7 +167,7 @@ fun EditableSwarmTaskTree(
                     tasks = task.children,
                     editable = editable,
                     onUpdateTask = onUpdateTask,
-                    modifier = Modifier.padding(start = (depth + 1) * 12.dp),
+                    modifier = Modifier.padding(start = ((depth + 1) * 12).dp),
                     depth = depth + 1,
                 )
             }
