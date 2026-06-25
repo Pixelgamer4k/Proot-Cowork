@@ -32,6 +32,14 @@ Match the reference mocks exactly. Source images: `Cowork-image-references/img_*
 1. **Top bar** — hamburger | orange dot + `ubuntu` + teal status dot (center) | camera, refresh, power
 2. **Desktop window** — 16:9 rounded frame, border, no title bar; state-based content or live X11
 3. **Tab body** — scrollable content below desktop
+4. **Tab-specific footer** — Chat: large composer; Terminal: `~ $ Enter command…` pill
+5. **Bottom nav** — 6 tabs; active = mint icon + label + 2dp mint bar above icon
+
+## Chat composer modes
+
+Only **Swarm** (multi-agent) and **Fast** (single agent). Scheduling lives in the Schedule tab — not in the composer.
+
+## Desktop preview states
 
 16:9 rounded frame with **no title bar or timestamps**. Content only:
 - **No container** — mint `+` import icon (tap to import)
@@ -39,9 +47,6 @@ Match the reference mocks exactly. Source images: `Cowork-image-references/img_*
 - **Booting** — spinner + “Booting”
 - **Off** — “Off” when stopped
 - **Running** — live X11 clipped inside the frame
-3. **Tab body** — scrollable content below desktop
-4. **Tab-specific footer** — Chat: large composer; Terminal: `~ $ Enter command…` pill
-5. **Bottom nav** — 6 tabs; active = mint icon + label + 2dp mint bar above icon
 
 ## Chat tab (img_f41e9e890fdc)
 
