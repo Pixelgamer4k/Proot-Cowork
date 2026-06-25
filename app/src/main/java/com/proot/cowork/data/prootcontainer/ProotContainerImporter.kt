@@ -160,15 +160,7 @@ class ProotContainerImporter(private val context: Context) {
 
         val distro = detectDistroName(partialDir) ?: ProotContainerValidator.DEFAULT_DISTRO
         val installError = try {
-            installExtractedLayout(partialDir, distro) { detail ->
-                onProgress(
-                    ImportProgressUpdate(
-                        phase = ImportPhase.INSTALLING,
-                        progress = 0.92f,
-                        detail = detail,
-                    ),
-                )
-            }
+            installExtractedLayout(partialDir, distro)
         } catch (e: OutOfMemoryError) {
             cleanupInstallTarget(distro)
             partialDir.deleteRecursively()
@@ -223,7 +215,6 @@ class ProotContainerImporter(private val context: Context) {
     private fun installExtractedLayout(
         partialDir: File,
         defaultDistro: String,
-        onDetail: (String) -> Unit = {},
     ): String? {
         val prefix = TermuxLayout.prefixDir(context)
         val runtimeDir = File(prefix, "var/lib/proot-distro").also { it.mkdirs() }
@@ -236,13 +227,11 @@ class ProotContainerImporter(private val context: Context) {
             when {
                 packaged != null -> {
                     if (dest.exists()) dest.deleteRecursively()
-                    onDetail("Moving Ubuntu container…")
                     moveDirectoryPreservingSymlinks(packaged, dest)
                 }
                 File(partialDir, "usr/bin/bash").isFile -> {
                     if (dest.exists()) dest.deleteRecursively()
                     val rootfs = File(dest, "rootfs").also { it.mkdirs() }
-                    onDetail("Moving rootfs…")
                     partialDir.listFiles()?.forEach { entry ->
                         val target = File(rootfs, entry.name)
                         moveEntryPreservingSymlinks(entry, target)
