@@ -39,7 +39,7 @@ fun DesktopPreviewCard(
         CoworkTab.Chat -> 200.dp
         else -> 176.dp
     }
-    val height by animateDpAsState(targetHeight, Motion.springSmooth, label = "desktopHeight")
+    val height by animateDpAsState(targetHeight, Motion.springSmoothDp, label = "desktopHeight")
 
     Box(
         modifier = modifier

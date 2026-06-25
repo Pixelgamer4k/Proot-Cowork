@@ -18,4 +18,6 @@ object Motion {
     )
     val tweenQuick = tween<Float>(durationMillis = 220)
     val tweenMedium = tween<Float>(durationMillis = 380)
+    val tweenColorQuick = tween<androidx.compose.ui.graphics.Color>(durationMillis = 220)
+    val springSmoothDp = spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.9f, stiffness = 280f)
 }

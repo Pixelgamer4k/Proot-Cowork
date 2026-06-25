@@ -63,7 +63,7 @@ fun CoworkTopBar(
         } else {
             MaterialTheme.colorScheme.outline
         },
-        animationSpec = Motion.tweenMedium,
+        animationSpec = Motion.tweenColorQuick,
         label = "statusColor",
     )
 

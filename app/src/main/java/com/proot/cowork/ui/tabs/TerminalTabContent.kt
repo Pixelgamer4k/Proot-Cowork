@@ -96,7 +96,7 @@ fun TerminalTabContent(
             text = stringResource(R.string.coming_soon_terminal),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp, bottom = 4.dp),
+            modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 4.dp),
         )
     }
 }

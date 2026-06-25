@@ -77,7 +77,7 @@ private fun CoworkNavItem(
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
         },
-        animationSpec = Motion.tweenQuick,
+        animationSpec = Motion.tweenColorQuick,
         label = "navTint",
     )
     val interaction = remember { MutableInteractionSource() }
