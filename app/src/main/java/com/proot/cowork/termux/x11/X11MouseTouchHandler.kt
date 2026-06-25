@@ -5,7 +5,6 @@ import android.graphics.PointF
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ViewConfiguration
-import com.termux.x11.LorieView
 import com.termux.x11.input.InputEventSender
 import com.termux.x11.input.InputStub
 import kotlin.math.hypot
@@ -17,6 +16,7 @@ import kotlin.math.hypot
 class X11MouseTouchHandler(
     context: Context,
     private val inputSender: InputEventSender,
+    private val isConnected: () -> Boolean,
     private val screenWidth: Int = X11DisplayConfig.WIDTH,
     private val screenHeight: Int = X11DisplayConfig.HEIGHT,
 ) {
@@ -39,7 +39,7 @@ class X11MouseTouchHandler(
             override fun onDown(e: MotionEvent): Boolean = true
 
             override fun onLongPress(e: MotionEvent) {
-                if (!LorieView.connected() || e.pointerCount > 1) return
+                if (!isConnected() || e.pointerCount > 1) return
                 val (x, y) = mapPoint(e.x, e.y)
                 clickAt(x, y, InputStub.BUTTON_RIGHT)
             }
@@ -50,7 +50,7 @@ class X11MouseTouchHandler(
                 distanceX: Float,
                 distanceY: Float,
             ): Boolean {
-                if (!LorieView.connected()) return false
+                if (!isConnected()) return false
                 inputSender.sendMouseWheelEvent(distanceX, distanceY)
                 return true
             }
@@ -63,7 +63,7 @@ class X11MouseTouchHandler(
     }
 
     fun onTouchEvent(event: MotionEvent): Boolean {
-        if (!LorieView.connected()) return false
+        if (!isConnected()) return false
 
         if (event.pointerCount >= 2) {
             when (event.actionMasked) {

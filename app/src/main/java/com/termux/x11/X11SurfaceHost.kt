@@ -13,7 +13,7 @@ class X11SurfaceHost(context: Context) : FrameLayout(context) {
 
     val lorieView = LorieView(context)
     private val inputSender = InputEventSender(lorieView)
-    private val touchHandler = X11MouseTouchHandler(context, inputSender)
+    private val touchHandler = X11MouseTouchHandler(context, inputSender) { LorieView.connected() }
 
     init {
         LorieViewEmbed.attachCallback(lorieView)
