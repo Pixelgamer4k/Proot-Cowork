@@ -7,6 +7,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.proot.cowork.data.prefs.SettingsRepository
+import com.proot.cowork.data.prootcontainer.ProotContainerRepository
 import com.proot.cowork.data.rootfs.RootfsRepository
 import com.proot.cowork.ui.home.HomeScreen
 import com.proot.cowork.ui.settings.SettingsScreen
@@ -20,6 +21,7 @@ object Routes {
 fun ProotCoworkApp(
     settingsRepository: SettingsRepository,
     rootfsRepository: RootfsRepository,
+    prootContainerRepository: ProotContainerRepository,
     dropDirectoryLabel: String,
     onImportDroppedFile: () -> Unit,
     onImportChooseFile: () -> Unit,
@@ -35,6 +37,7 @@ fun ProotCoworkApp(
             HomeScreen(
                 settingsRepository = settingsRepository,
                 rootfsRepository = rootfsRepository,
+                prootContainerRepository = prootContainerRepository,
                 dropDirectoryLabel = dropDirectoryLabel,
                 onImportDroppedFile = onImportDroppedFile,
                 onImportChooseFile = onImportChooseFile,

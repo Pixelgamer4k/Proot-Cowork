@@ -4,11 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.proot.cowork.data.prefs.SettingsRepository
+import com.proot.cowork.data.prootcontainer.ProotContainerRepository
 import com.proot.cowork.data.rootfs.RootfsRepository
 import com.proot.cowork.domain.agent.AgentMessage
 import com.proot.cowork.domain.agent.ExecutionMode
 import com.proot.cowork.domain.agent.MessageRole
 import com.proot.cowork.domain.agent.SwarmTask
+import com.proot.cowork.domain.desktop.TERMUX_STACK_DESKTOP
+import com.proot.cowork.domain.importing.ImportPhase
+import com.proot.cowork.domain.importing.ImportSession
+import com.proot.cowork.domain.importing.ImportUiState
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
 import com.proot.cowork.domain.vnc.VncSession
@@ -23,7 +28,7 @@ import java.util.UUID
 
 data class HomeUiState(
     val desktopState: DesktopState = DesktopState.NO_ROOTFS,
-    val importProgress: Float = 0f,
+    val importUiState: ImportUiState = ImportUiState(),
     val distroName: String = "",
     val desktopLogHint: String? = null,
     val messages: List<AgentMessage> = emptyList(),
@@ -36,23 +41,21 @@ data class HomeUiState(
 class HomeViewModel(
     private val settingsRepository: SettingsRepository,
     private val rootfsRepository: RootfsRepository,
+    private val prootContainerRepository: ProotContainerRepository,
 ) : ViewModel() {
 
     private val localState = MutableStateFlow(HomeUiState())
 
     val uiState: StateFlow<HomeUiState> = combine(
         settingsRepository.rootfsState,
+        ImportSession.state,
         DesktopSession.state,
         DesktopSession.logLines,
         localState,
-    ) { rootfs, desktop, logs, local ->
+    ) { rootfs, import, desktop, logs, local ->
         local.copy(
-            desktopState = when {
-                rootfs.isImporting -> DesktopState.IMPORTING
-                !rootfs.isInstalled -> DesktopState.NO_ROOTFS
-                else -> desktop
-            },
-            importProgress = rootfs.importProgress,
+            desktopState = resolveDesktopState(rootfs.isInstalled, rootfs.isImporting, import, desktop),
+            importUiState = import,
             distroName = rootfs.distroName,
             desktopLogHint = if (desktop == DesktopState.STOPPED) {
                 logs.lastOrNull(::looksLikeDesktopError) ?: logs.lastOrNull()
@@ -62,13 +65,37 @@ class HomeViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())
 
+    private fun resolveDesktopState(
+        installed: Boolean,
+        legacyImporting: Boolean,
+        import: ImportUiState,
+        desktop: DesktopState,
+    ): DesktopState = when {
+        import.active && import.phase != ImportPhase.STARTING_DESKTOP -> DesktopState.IMPORTING
+        legacyImporting -> DesktopState.IMPORTING
+        import.active && import.phase == ImportPhase.STARTING_DESKTOP -> DesktopState.STARTING
+        !installed && !import.active -> DesktopState.NO_ROOTFS
+        desktop == DesktopState.STARTING -> DesktopState.STARTING
+        else -> desktop
+    }
+
     fun onPowerOff() {
-        rootfsRepository.stopDesktopService()
-        DesktopSession.setState(DesktopState.STOPPED)
+        if (TERMUX_STACK_DESKTOP) {
+            prootContainerRepository.stopDesktop()
+        } else {
+            rootfsRepository.stopDesktopService()
+            DesktopSession.setState(DesktopState.STOPPED)
+        }
     }
 
     fun onReboot() {
-        rootfsRepository.rebootDesktopService()
+        viewModelScope.launch {
+            if (TERMUX_STACK_DESKTOP) {
+                prootContainerRepository.rebootDesktop()
+            } else {
+                rootfsRepository.rebootDesktopService()
+            }
+        }
     }
 
     fun onScreenshot() {
@@ -177,7 +204,7 @@ class HomeViewModel(
                 messages = it.messages + AgentMessage(
                     id = UUID.randomUUID().toString(),
                     role = MessageRole.SYSTEM,
-                    content = "External terminal (Phase 5): PTY overlay to proot shell",
+                    content = "Shell access will open in a future update.",
                 ),
             )
         }
@@ -220,10 +247,15 @@ class HomeViewModel(
         fun factory(
             settingsRepository: SettingsRepository,
             rootfsRepository: RootfsRepository,
+            prootContainerRepository: ProotContainerRepository,
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return HomeViewModel(settingsRepository, rootfsRepository) as T
+                return HomeViewModel(
+                    settingsRepository,
+                    rootfsRepository,
+                    prootContainerRepository,
+                ) as T
             }
         }
     }

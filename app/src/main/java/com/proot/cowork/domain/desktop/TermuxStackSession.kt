@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * Both layers keep running; [frontLayer] only changes z-order and touch routing.
  */
 object TermuxStackSession {
-    private val _frontLayer = MutableStateFlow(StackFrontLayer.TERMUX)
+    private val _frontLayer = MutableStateFlow(StackFrontLayer.X11)
     val frontLayer: StateFlow<StackFrontLayer> = _frontLayer.asStateFlow()
 
     private val _x11Ready = MutableStateFlow(false)

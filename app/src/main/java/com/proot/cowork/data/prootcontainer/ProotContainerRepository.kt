@@ -4,10 +4,15 @@ import android.content.Context
 import android.net.Uri
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.rootfs.ImportResult
+import com.proot.cowork.domain.desktop.StackFrontLayer
 import com.proot.cowork.domain.desktop.TermuxStackSession
+import com.proot.cowork.domain.importing.ImportPhase
+import com.proot.cowork.domain.importing.ImportProgressUpdate
+import com.proot.cowork.domain.importing.ImportSession
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
 import com.proot.cowork.termux.bootstrap.TermuxBootstrap
+import com.proot.cowork.termux.proot.ProotXfceLauncher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -21,13 +26,24 @@ class ProotContainerRepository(
     suspend fun repairStateOnStartup() = withContext(Dispatchers.IO) {
         val partial = getPartialDir()
         partial.deleteRecursively()
+        settingsRepository.clearImportingState()
+        ImportSession.reset()
+
         if (ProotContainerValidator.isInstalled(context)) {
-            settingsRepository.clearImportingState()
             settingsRepository.ensureRootfsInstalledIfPresent(
                 ProotContainerValidator.rootfsDir(context),
             )
             ProotContainerSysdata.installIfNeeded(context)
-            DesktopSession.setState(DesktopState.RUNNING)
+            when {
+                ProotXfceLauncher.isRunning() -> {
+                    DesktopSession.setState(DesktopState.RUNNING)
+                    TermuxStackSession.setFrontLayer(StackFrontLayer.X11)
+                }
+                DesktopSession.state.value == DesktopState.STOPPED -> {
+                    // User powered off — do not auto-restart on resume.
+                }
+                else -> startDesktopIfPossible()
+            }
         } else {
             val containerDir = ProotContainerValidator.containerDir(context)
             if (containerDir.exists()) {
@@ -51,29 +67,59 @@ class ProotContainerRepository(
     suspend fun importAutoDiscover(pathHint: String? = null): ImportResult {
         val file = ProotContainerTarballLocator.discover(context, pathHint)
             ?: return ImportResult.Error(
-                buildString {
-                    append("No readable ${ProotContainerTarballLocator.DEFAULT_FILENAME} found.")
-                    append(" Build it in Termux, then copy to ")
-                    append(ProotContainerTarballLocator.dropDirectoryLabel(context))
-                },
+                "No ${ProotContainerTarballLocator.DEFAULT_FILENAME} found in app storage. " +
+                    "Use Choose file… or copy to ${ProotContainerTarballLocator.dropDirectoryLabel(context)}",
             )
         return importFromFile(file)
     }
 
+    suspend fun startDesktopIfPossible(distro: String = ProotContainerValidator.DEFAULT_DISTRO): Boolean =
+        withContext(Dispatchers.IO) {
+            if (!isInstalled()) return@withContext false
+            if (!TermuxBootstrap.ensureInstalled(context)) return@withContext false
+
+            DesktopSession.setState(DesktopState.STARTING)
+            TermuxStackSession.setFrontLayer(StackFrontLayer.X11)
+            ImportSession.update(ImportPhase.STARTING_DESKTOP, 1f, "Launching Ubuntu XFCE…")
+
+            val started = ProotXfceLauncher.start(context, distro)
+            ImportSession.reset()
+            if (started) {
+                DesktopSession.setState(DesktopState.RUNNING)
+                TermuxStackSession.appendLog("Ubuntu desktop running")
+            } else {
+                DesktopSession.setState(DesktopState.STOPPED)
+                DesktopSession.appendLog("Could not start desktop — tap Reboot to retry")
+            }
+            started
+        }
+
+    fun stopDesktop() {
+        ProotXfceLauncher.stop()
+        DesktopSession.setState(DesktopState.STOPPED)
+    }
+
+    suspend fun rebootDesktop(distro: String = ProotContainerValidator.DEFAULT_DISTRO) {
+        stopDesktop()
+        startDesktopIfPossible(distro)
+    }
+
     private suspend fun importContainer(
-        extract: suspend (partialDir: File, onProgress: suspend (Float) -> Unit) -> ImportResult,
+        extract: suspend (partialDir: File, onProgress: suspend (ImportProgressUpdate) -> Unit) -> ImportResult,
     ): ImportResult = withContext(Dispatchers.IO) {
         if (!TermuxBootstrap.ensureInstalled(context)) {
             return@withContext ImportResult.Error("Termux bootstrap not ready — wait a moment and retry")
         }
+
+        stopDesktop()
+        ImportSession.begin()
         settingsRepository.setImporting(true, 0f)
         DesktopSession.setState(DesktopState.IMPORTING)
-        TermuxStackSession.appendLog("Importing proot container…")
 
         val partialDir = getPartialDir()
         val result = try {
-            extract(partialDir) { progress ->
-                settingsRepository.setImporting(true, progress)
+            extract(partialDir) { update ->
+                ImportSession.update(update.phase, update.progress, update.detail)
             }
         } catch (e: Exception) {
             partialDir.deleteRecursively()
@@ -83,21 +129,24 @@ class ProotContainerRepository(
         when (result) {
             is ImportResult.Success -> {
                 if (!ProotContainerValidator.isInstalled(context)) {
+                    ImportSession.reset()
                     settingsRepository.clearImportingState()
                     DesktopSession.setState(DesktopState.NO_ROOTFS)
                     ImportResult.Error("Imported container failed validation")
                 } else {
+                    settingsRepository.clearImportingState()
                     settingsRepository.setRootfsInstalled(ProotContainerValidator.DEFAULT_DISTRO)
-                    DesktopSession.setState(DesktopState.RUNNING)
-                    TermuxStackSession.appendLog("Ubuntu + XFCE ready — run: proot-xfce-start ubuntu")
+                    ImportSession.update(ImportPhase.STARTING_DESKTOP, 1f, "Launching Ubuntu XFCE…")
+                    startDesktopIfPossible()
                     result
                 }
             }
             is ImportResult.Error -> {
                 partialDir.deleteRecursively()
+                ImportSession.reset()
                 settingsRepository.clearImportingState()
                 DesktopSession.setState(DesktopState.NO_ROOTFS)
-                TermuxStackSession.appendLog("Import failed: ${result.message}")
+                DesktopSession.appendLog("Import failed: ${result.message}")
                 result
             }
         }

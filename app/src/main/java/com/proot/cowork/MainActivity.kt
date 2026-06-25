@@ -69,6 +69,7 @@ class MainActivity : ComponentActivity() {
                 ProotCoworkApp(
                     settingsRepository = app.settingsRepository,
                     rootfsRepository = app.rootfsRepository,
+                    prootContainerRepository = app.prootContainerRepository,
                     dropDirectoryLabel = dropLabel,
                     onImportDroppedFile = {
                         scope.launch {

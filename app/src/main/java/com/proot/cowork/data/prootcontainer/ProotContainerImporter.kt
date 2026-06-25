@@ -3,6 +3,8 @@ package com.proot.cowork.data.prootcontainer
 import android.content.Context
 import android.net.Uri
 import com.proot.cowork.data.rootfs.ImportResult
+import com.proot.cowork.domain.importing.ImportPhase
+import com.proot.cowork.domain.importing.ImportProgressUpdate
 import com.proot.cowork.termux.bootstrap.TermuxLayout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -16,13 +18,14 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.math.roundToInt
 
 class ProotContainerImporter(private val context: Context) {
 
     suspend fun importFromUri(
         sourceUri: Uri,
         partialDir: File,
-        onProgress: suspend (Float) -> Unit,
+        onProgress: suspend (ImportProgressUpdate) -> Unit,
     ): ImportResult = withContext(Dispatchers.IO) {
         if (sourceUri.scheme == "file") {
             val path = sourceUri.path
@@ -46,7 +49,7 @@ class ProotContainerImporter(private val context: Context) {
     suspend fun importFromFile(
         sourceFile: File,
         partialDir: File,
-        onProgress: suspend (Float) -> Unit,
+        onProgress: suspend (ImportProgressUpdate) -> Unit,
     ): ImportResult = withContext(Dispatchers.IO) {
         if (!ProotContainerTarballLocator.isReadableTarball(sourceFile)) {
             return@withContext ImportResult.Error(
@@ -67,17 +70,41 @@ class ProotContainerImporter(private val context: Context) {
         raw: InputStream,
         size: Long,
         partialDir: File,
-        onProgress: suspend (Float) -> Unit,
+        onProgress: suspend (ImportProgressUpdate) -> Unit,
     ): ImportResult {
+        onProgress(
+            ImportProgressUpdate(
+                phase = ImportPhase.PREPARING,
+                progress = 0.02f,
+                detail = if (size > 0) formatBytes(size) else "",
+            ),
+        )
+
         if (partialDir.exists()) partialDir.deleteRecursively()
         partialDir.mkdirs()
 
         var lastReported = -1f
-        suspend fun reportProgress(value: Float) {
-            val clamped = value.coerceIn(0f, 1f)
-            if (clamped - lastReported >= 0.01f || clamped >= 1f) {
+        suspend fun reportExtract(bytesRead: Long) {
+            val fraction = if (size > 0) {
+                0.05f + (bytesRead.toFloat() / size) * 0.80f
+            } else {
+                0.05f + ((bytesRead / (50L * 1024 * 1024)) % 80) / 100f
+            }
+            val clamped = fraction.coerceIn(0.05f, 0.85f)
+            if (clamped - lastReported >= 0.008f || clamped >= 0.85f) {
                 lastReported = clamped
-                onProgress(clamped)
+                val detail = if (size > 0) {
+                    "${formatBytes(bytesRead)} / ${formatBytes(size)}"
+                } else {
+                    formatBytes(bytesRead)
+                }
+                onProgress(
+                    ImportProgressUpdate(
+                        phase = ImportPhase.EXTRACTING,
+                        progress = clamped,
+                        detail = detail,
+                    ),
+                )
             }
         }
 
@@ -103,7 +130,7 @@ class ProotContainerImporter(private val context: Context) {
                                 else -> {
                                     outFile.parentFile?.mkdirs()
                                     bytesRead += extractFile(tar, outFile, entry)
-                                    if (size > 0) reportProgress(bytesRead.toFloat() / size)
+                                    reportExtract(bytesRead)
                                 }
                             }
                         }
@@ -113,6 +140,14 @@ class ProotContainerImporter(private val context: Context) {
             }
         }
 
+        onProgress(
+            ImportProgressUpdate(
+                phase = ImportPhase.INSTALLING,
+                progress = 0.88f,
+                detail = "Installing into proot-distro…",
+            ),
+        )
+
         val distro = detectDistroName(partialDir) ?: ProotContainerValidator.DEFAULT_DISTRO
         val installError = installExtractedLayout(partialDir, distro)
         if (installError != null) {
@@ -120,9 +155,32 @@ class ProotContainerImporter(private val context: Context) {
             return ImportResult.Error(installError)
         }
 
+        onProgress(
+            ImportProgressUpdate(
+                phase = ImportPhase.FINALIZING,
+                progress = 0.97f,
+                detail = "Validating Ubuntu + XFCE…",
+            ),
+        )
+
         partialDir.deleteRecursively()
-        reportProgress(1f)
+        onProgress(
+            ImportProgressUpdate(
+                phase = ImportPhase.FINALIZING,
+                progress = 1f,
+                detail = "",
+            ),
+        )
         return ImportResult.Success(ProotContainerValidator.containerDir(context, distro))
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        if (bytes < 1024) return "$bytes B"
+        val kb = bytes / 1024.0
+        if (kb < 1024) return "${kb.roundToInt()} KB"
+        val mb = kb / 1024.0
+        if (mb < 1024) return "${"%.1f".format(mb)} MB"
+        return "${"%.2f".format(mb / 1024.0)} GB"
     }
 
     private fun detectDistroName(partialDir: File): String? {
@@ -160,7 +218,7 @@ class ProotContainerImporter(private val context: Context) {
                 }
                 writeDefaultManifest(dest)
             }
-            else -> return "Invalid archive: expected proot-distro backup (ubuntu/rootfs/) or a flat rootfs"
+            else -> return "Invalid archive: expected ubuntu/rootfs/ layout"
         }
 
         ProotContainerSysdata.installIfNeeded(context, dest)
@@ -171,7 +229,7 @@ class ProotContainerImporter(private val context: Context) {
         if (!File(rootfs, "usr/bin/xfce4-session").isFile &&
             !File(rootfs, "usr/bin/startxfce4").isFile
         ) {
-            return "Imported container missing XFCE (run proot-xfce-install in Termux first)"
+            return "Imported container missing XFCE desktop"
         }
         return null
     }

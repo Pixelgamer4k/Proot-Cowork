@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.proot.cowork.data.prefs.SettingsRepository
+import com.proot.cowork.data.prootcontainer.ProotContainerRepository
 import com.proot.cowork.data.rootfs.RootfsRepository
 import com.proot.cowork.ui.agent.AgentPanel
 import com.proot.cowork.ui.agent.ChatComposer
@@ -31,12 +32,17 @@ import com.proot.cowork.ui.desktop.DesktopPanel
 fun HomeScreen(
     settingsRepository: SettingsRepository,
     rootfsRepository: RootfsRepository,
+    prootContainerRepository: ProotContainerRepository,
     dropDirectoryLabel: String,
     onImportDroppedFile: () -> Unit,
     onImportChooseFile: () -> Unit,
     onNavigateToSettings: () -> Unit,
     viewModel: HomeViewModel = viewModel(
-        factory = HomeViewModel.factory(settingsRepository, rootfsRepository),
+        factory = HomeViewModel.factory(
+            settingsRepository,
+            rootfsRepository,
+            prootContainerRepository,
+        ),
     ),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -54,7 +60,7 @@ fun HomeScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             DesktopPanel(
                 desktopState = uiState.desktopState,
-                importProgress = uiState.importProgress,
+                importUiState = uiState.importUiState,
                 distroName = uiState.distroName,
                 desktopLogHint = uiState.desktopLogHint,
                 dropDirectoryLabel = dropDirectoryLabel,
