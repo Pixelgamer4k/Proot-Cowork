@@ -37,12 +37,15 @@ jobs:
           set -euo pipefail
           ARCHIVE=dist/proot-cowork-ubuntu.tar.gz
           ls -lh dist/
-          tar -tzf "$ARCHIVE" | head -20
-          echo "total entries: $(tar -tzf "$ARCHIVE" | wc -l)"
-          tar -tzf "$ARCHIVE" | grep -q 'ubuntu/rootfs/opt/cowork/computer-use/cowork_desktop.py'
-          tar -tzf "$ARCHIVE" | grep -qE 'ubuntu/rootfs/opt/firefox/firefox|ubuntu/rootfs/usr/local/bin/firefox|ubuntu/rootfs/usr/bin/falkon'
-          tar -tzf "$ARCHIVE" | grep -q 'ubuntu/rootfs/usr/bin/xdotool'
-          tar -tzf "$ARCHIVE" | grep -q 'ubuntu/manifest.json'
+          LIST="$(mktemp)"
+          trap 'rm -f "$LIST"' EXIT
+          tar -tzf "$ARCHIVE" > "$LIST"
+          head -20 "$LIST"
+          echo "total entries: $(wc -l < "$LIST")"
+          grep -q 'ubuntu/rootfs/opt/cowork/computer-use/cowork_desktop.py' "$LIST"
+          grep -qE 'ubuntu/rootfs/opt/firefox/firefox|ubuntu/rootfs/usr/local/bin/firefox|ubuntu/rootfs/usr/bin/falkon' "$LIST"
+          grep -q 'ubuntu/rootfs/usr/bin/xdotool' "$LIST"
+          grep -q 'ubuntu/manifest.json' "$LIST"
           echo "cowork automation checks passed"
 
       - name: Upload rootfs artifact
