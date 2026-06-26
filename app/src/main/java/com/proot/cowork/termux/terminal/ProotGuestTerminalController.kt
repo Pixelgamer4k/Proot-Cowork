@@ -59,7 +59,7 @@ object ProotGuestTerminalController {
         val newSession = TerminalSession(
             bash.absolutePath,
             home,
-            arrayOf(script.absolutePath, distro),
+            arrayOf(bash.absolutePath, script.absolutePath, distro),
             TermuxShellEnvironment.build(context),
             10_000,
             client,

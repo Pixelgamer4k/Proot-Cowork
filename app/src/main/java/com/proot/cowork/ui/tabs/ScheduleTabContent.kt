@@ -44,6 +44,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 @Composable
 fun ScheduleTabContent(
@@ -139,6 +140,26 @@ fun ScheduleTabContent(
                     Text(stringResource(R.string.schedule_pick_time))
                 }
             }
+            Row(
+                Modifier.fillMaxWidth().padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf(2 to "2 min", 5 to "5 min", 15 to "15 min").forEach { (minutes, label) ->
+                    OutlinedButton(
+                        onClick = {
+                            val cal = Calendar.getInstance()
+                            cal.add(Calendar.MINUTE, minutes)
+                            cal.set(Calendar.SECOND, 0)
+                            cal.set(Calendar.MILLISECOND, 0)
+                            selectedTime = cal.timeInMillis
+                        },
+                        shape = CoworkTokens.ShapeCard,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(label)
+                    }
+                }
+            }
             OutlinedButton(
                 onClick = {
                     if (draft.isNotBlank() && isApiConfigured) {
@@ -187,6 +208,7 @@ private fun ScheduleRow(
         ScheduleStatus.CANCELLED -> stringResource(R.string.status_cancelled) to CoworkTokens.TextMuted
     }
     val whenLabel = rememberScheduleLabel(item.triggerAtMillis)
+    val relativeLabel = rememberScheduleRelativeLabel(item.triggerAtMillis)
     Surface(
         shape = CoworkTokens.ShapeCard,
         color = CoworkTokens.Surface,
@@ -214,6 +236,9 @@ private fun ScheduleRow(
                 Icon(Icons.Default.Schedule, null, Modifier.size(14.dp), tint = CoworkTokens.TextMuted)
                 Spacer(Modifier.size(6.dp))
                 Text(whenLabel, color = CoworkTokens.TextMuted, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                if (item.status == ScheduleStatus.PENDING && relativeLabel != null) {
+                    Text(" · $relativeLabel", color = CoworkTokens.Pending, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                }
             }
             item.lastError?.let { error ->
                 Text(error, Modifier.padding(top = 6.dp), color = CoworkTokens.Failed, style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
@@ -228,9 +253,22 @@ private fun rememberScheduleLabel(millis: Long): String {
     return fmt.format(Date(millis))
 }
 
+@Composable
+private fun rememberScheduleRelativeLabel(millis: Long): String? {
+    val now = System.currentTimeMillis()
+    val delta = millis - now
+    if (delta <= 0L) return null
+    val minutes = TimeUnit.MILLISECONDS.toMinutes(delta)
+    return when {
+        minutes < 1L -> "in <1 min"
+        minutes < 60L -> "in ${minutes} min"
+        else -> "in ${minutes / 60}h ${minutes % 60}m"
+    }
+}
+
 private fun defaultScheduleTime(): Long {
     val cal = Calendar.getInstance()
-    cal.add(Calendar.HOUR_OF_DAY, 1)
+    cal.add(Calendar.MINUTE, 5)
     cal.set(Calendar.SECOND, 0)
     cal.set(Calendar.MILLISECOND, 0)
     return cal.timeInMillis
