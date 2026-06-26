@@ -24,6 +24,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Mic
@@ -69,11 +72,16 @@ fun ChatComposer(
     executionMode: ExecutionMode,
     onModeChange: (ExecutionMode) -> Unit,
     onFocusChange: (Boolean) -> Unit,
+    artifactFileNames: List<String> = emptyList(),
+    onPickFile: () -> Unit,
+    onAttachArtifact: (String) -> Unit,
+    onAddContextBlock: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     var modeMenuOpen by remember { mutableStateOf(false) }
+    var attachMenuOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(isFocused) { onFocusChange(isFocused) }
 
@@ -142,14 +150,46 @@ fun ChatComposer(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(
-                onClick = { },
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(CoworkTokens.SurfaceElevated),
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null, tint = CoworkTokens.TextSecondary)
+            Box {
+                IconButton(
+                    onClick = { attachMenuOpen = true },
+                    enabled = !isExecuting,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(CoworkTokens.SurfaceElevated),
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.composer_attach_menu), tint = CoworkTokens.TextSecondary)
+                }
+                DropdownMenu(expanded = attachMenuOpen, onDismissRequest = { attachMenuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.composer_attach_file)) },
+                        leadingIcon = { Icon(Icons.Default.AttachFile, null) },
+                        onClick = { attachMenuOpen = false; onPickFile() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.composer_add_context)) },
+                        leadingIcon = { Icon(Icons.Default.Notes, null) },
+                        onClick = { attachMenuOpen = false; onAddContextBlock() },
+                    )
+                    if (artifactFileNames.isNotEmpty()) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.composer_attach_artifact)) },
+                            leadingIcon = { Icon(Icons.Default.FolderOpen, null) },
+                            enabled = false,
+                            onClick = { },
+                        )
+                        artifactFileNames.takeLast(8).forEach { name ->
+                            DropdownMenuItem(
+                                text = { Text(name, maxLines = 1) },
+                                onClick = {
+                                    attachMenuOpen = false
+                                    onAttachArtifact(name)
+                                },
+                            )
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.size(8.dp))

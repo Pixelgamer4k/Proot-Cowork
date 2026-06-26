@@ -5,7 +5,8 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.proot.cowork.data.llm.LlmEndpoint
+import com.proot.cowork.data.chat.ChatHistoryStore
+import com.proot.cowork.data.chat.ChatTranscriptExporter
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.prootcontainer.ProotContainerRepository
 import com.proot.cowork.data.rootfs.ImportResult
@@ -46,6 +47,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.proot.cowork.util.AttachmentReader
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import java.util.UUID
 
 data class HomeUiState(
@@ -72,6 +77,8 @@ data class HomeUiState(
     val toolLimitReached: Boolean = false,
     val shellCommandLog: List<ShellCommandLogEntry> = emptyList(),
     val cancellationMessage: String? = null,
+    val chatSnackbar: String? = null,
+    val shareTranscriptUri: Uri? = null,
 )
 
 class HomeViewModel(
@@ -82,10 +89,33 @@ class HomeViewModel(
 ) : ViewModel() {
 
     private val agentRunner = CoworkAgentRunner(application)
+    private val chatHistoryStore = ChatHistoryStore(application)
+    private val transcriptExporter = ChatTranscriptExporter(application)
     private val localState = MutableStateFlow(HomeUiState())
     private var chatJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            val saved = chatHistoryStore.load()
+            if (saved.messages.isNotEmpty()) {
+                localState.update {
+                    it.copy(messages = saved.messages, executionMode = saved.executionMode)
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            localState
+                .map { it.messages to it.executionMode }
+                .distinctUntilChanged()
+                .debounce(400)
+                .collect { (messages, mode) ->
+                    if (messages.isNotEmpty()) {
+                        chatHistoryStore.save(messages, mode)
+                    }
+                }
+        }
+
         viewModelScope.launch {
             AgentExecutionSession.snapshot.collect { snap ->
                 localState.update { local ->
@@ -260,6 +290,127 @@ class HomeViewModel(
         localState.update { it.copy(chatError = null) }
     }
 
+    fun clearChatSnackbar() {
+        localState.update { it.copy(chatSnackbar = null) }
+    }
+
+    fun clearShareTranscriptUri() {
+        localState.update { it.copy(shareTranscriptUri = null) }
+    }
+
+    fun onClearConversation() {
+        if (localState.value.isExecuting) onStop()
+        viewModelScope.launch {
+            chatHistoryStore.clear()
+        }
+        localState.update {
+            it.copy(
+                messages = emptyList(),
+                swarmResponse = null,
+                swarmTasks = emptyList(),
+                awaitingApproval = false,
+                pendingPlan = null,
+                inputText = "",
+                isExecuting = false,
+                chatSnackbar = application.getString(com.proot.cowork.R.string.chat_cleared),
+            )
+        }
+    }
+
+    fun onExportTranscript() {
+        viewModelScope.launch {
+            val uri = transcriptExporter.export(localState.value.messages)
+            localState.update {
+                it.copy(
+                    shareTranscriptUri = uri,
+                    chatSnackbar = if (uri != null) {
+                        application.getString(com.proot.cowork.R.string.chat_export_ready)
+                    } else {
+                        application.getString(com.proot.cowork.R.string.chat_nothing_to_export)
+                    },
+                )
+            }
+        }
+    }
+
+    fun onMessageCopied() {
+        localState.update {
+            it.copy(chatSnackbar = application.getString(com.proot.cowork.R.string.chat_copied))
+        }
+    }
+
+    fun onEditUserMessage(messageId: String, newContent: String) {
+        val trimmed = newContent.trim()
+        if (trimmed.isEmpty() || localState.value.isExecuting || localState.value.awaitingApproval) return
+        val idx = localState.value.messages.indexOfFirst { it.id == messageId }
+        if (idx < 0 || localState.value.messages[idx].role != MessageRole.USER) return
+        truncateMessagesFrom(idx)
+        sendUserMessage(trimmed)
+    }
+
+    fun onRegenerateFrom(messageId: String) {
+        if (localState.value.isExecuting || localState.value.awaitingApproval) return
+        val messages = localState.value.messages
+        val idx = messages.indexOfFirst { it.id == messageId }
+        if (idx < 0) return
+        when (messages[idx].role) {
+            MessageRole.USER -> {
+                val text = messages[idx].content
+                truncateMessagesFrom(idx)
+                sendUserMessage(text)
+            }
+            MessageRole.ASSISTANT -> {
+                val userIdx = messages.take(idx).indexOfLast { it.role == MessageRole.USER }
+                if (userIdx < 0) return
+                val text = messages[userIdx].content
+                truncateMessagesFrom(userIdx)
+                sendUserMessage(text)
+            }
+            else -> Unit
+        }
+    }
+
+    fun onAttachFile(uri: Uri) {
+        viewModelScope.launch {
+            val (name, snippet) = AttachmentReader.readTextSnippet(application, uri)
+            appendAttachmentToInput(name, snippet)
+        }
+    }
+
+    fun onAttachArtifact(relativeName: String) {
+        viewModelScope.launch {
+            val file = settingsRepository.getArtifactsDir().resolve(relativeName)
+            val (name, snippet) = AttachmentReader.readArtifactFile(file)
+            appendAttachmentToInput(name, snippet)
+        }
+    }
+
+    fun onAddContextBlock() {
+        localState.update { state ->
+            val prefix = if (state.inputText.isBlank()) "" else state.inputText + "\n\n"
+            state.copy(inputText = prefix + application.getString(com.proot.cowork.R.string.composer_context_template))
+        }
+    }
+
+    private fun appendAttachmentToInput(name: String, snippet: String) {
+        localState.update { state ->
+            val prefix = if (state.inputText.isBlank()) "" else state.inputText + "\n\n"
+            state.copy(inputText = prefix + "[Attached: $name]\n$snippet")
+        }
+    }
+
+    private fun truncateMessagesFrom(fromIndex: Int) {
+        localState.update {
+            it.copy(
+                messages = it.messages.take(fromIndex),
+                swarmResponse = null,
+                awaitingApproval = false,
+                pendingPlan = null,
+                swarmTasks = emptyList(),
+            )
+        }
+    }
+
     fun importFromUri(uri: Uri) {
         if (localState.value.isImportBusy) return
         viewModelScope.launch {
@@ -407,6 +558,11 @@ class HomeViewModel(
 
     fun onSend() {
         val text = localState.value.inputText.trim()
+        if (text.isEmpty()) return
+        sendUserMessage(text, clearInput = true)
+    }
+
+    private fun sendUserMessage(text: String, clearInput: Boolean = false) {
         if (text.isEmpty() || localState.value.isExecuting || localState.value.awaitingApproval) return
 
         chatJob?.cancel()
@@ -430,7 +586,7 @@ class HomeViewModel(
 
             localState.update {
                 it.copy(
-                    inputText = "",
+                    inputText = if (clearInput) "" else it.inputText,
                     isExecuting = true,
                     chatError = null,
                     awaitingApproval = false,
@@ -561,7 +717,7 @@ class HomeViewModel(
     }
 
     fun onQuickPrompt(prompt: String) {
-        onInputChange(prompt)
+        sendUserMessage(prompt.trim(), clearInput = false)
     }
 
     fun onScheduleDraft(text: String) {

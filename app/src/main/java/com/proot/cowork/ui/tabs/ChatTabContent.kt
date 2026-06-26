@@ -2,6 +2,7 @@ package com.proot.cowork.ui.tabs
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,23 +13,29 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddComment
+import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.proot.cowork.R
@@ -40,6 +47,7 @@ import com.proot.cowork.ui.agent.ToolMessageBubble
 import com.proot.cowork.ui.agent.swarm.ShellCommandLogCard
 import com.proot.cowork.ui.agent.swarm.SwarmMessageItem
 import com.proot.cowork.ui.agent.swarm.ToolCallLimitBar
+import com.proot.cowork.ui.chat.ChatMessageBubble
 import com.proot.cowork.ui.design.CoworkTokens
 
 private val QUICK_PROMPTS = listOf(
@@ -66,6 +74,12 @@ fun ChatTabContent(
     onApprovePlan: () -> Unit,
     onRejectPlan: () -> Unit,
     onCancelSubtask: (String) -> Unit,
+    onNavigateToSettings: () -> Unit,
+    onNewConversation: () -> Unit,
+    onExportTranscript: () -> Unit,
+    onMessageCopied: () -> Unit,
+    onEditUserMessage: (String, String) -> Unit,
+    onRegenerateFrom: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -85,6 +99,27 @@ fun ChatTabContent(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = composerBottomPadding + 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        if (visibleMessages.isNotEmpty()) {
+            item(key = "chat-actions") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = onExportTranscript) {
+                        Icon(Icons.Default.IosShare, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.size(6.dp))
+                        Text(stringResource(R.string.chat_export))
+                    }
+                    TextButton(onClick = onNewConversation) {
+                        Icon(Icons.Default.AddComment, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.size(6.dp))
+                        Text(stringResource(R.string.chat_new_conversation))
+                    }
+                }
+            }
+        }
+
         if (visibleMessages.isEmpty() && !isExecuting && !awaitingApproval) {
             item(key = "hero") {
                 Column(
@@ -104,14 +139,27 @@ fun ChatTabContent(
                     Spacer(modifier = Modifier.size(12.dp))
                     Text(stringResource(R.string.agent_empty_title), fontWeight = FontWeight.SemiBold, color = CoworkTokens.TextPrimary)
                     Spacer(modifier = Modifier.size(6.dp))
-                    Text(
-                        if (isApiConfigured) {
-                            stringResource(R.string.agent_empty_hint)
-                        } else {
-                            stringResource(R.string.agent_api_required)
-                        },
-                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                    )
+                    if (isApiConfigured) {
+                        Text(
+                            stringResource(R.string.agent_empty_hint),
+                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                            color = CoworkTokens.TextSecondary,
+                        )
+                    } else {
+                        val link = stringResource(R.string.agent_empty_settings_link)
+                        val annotated = buildAnnotatedString {
+                            withStyle(SpanStyle(color = CoworkTokens.Mint, textDecoration = TextDecoration.Underline)) {
+                                append(link)
+                            }
+                            append(stringResource(R.string.agent_empty_settings_suffix))
+                        }
+                        Text(
+                            text = annotated,
+                            modifier = Modifier.clickable(onClick = onNavigateToSettings),
+                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                            color = CoworkTokens.TextSecondary,
+                        )
+                    }
                     Spacer(modifier = Modifier.size(14.dp))
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -161,7 +209,23 @@ fun ChatTabContent(
                 msg.role == MessageRole.TOOL -> {
                     ToolMessageBubble(msg, Modifier.fillMaxWidth())
                 }
-                else -> ChatMessageBubble(msg)
+                else -> {
+                    ChatMessageBubble(
+                        message = msg,
+                        onCopy = onMessageCopied,
+                        onEdit = if (msg.role == MessageRole.USER) {
+                            { newText -> onEditUserMessage(msg.id, newText) }
+                        } else {
+                            null
+                        },
+                        onRegenerate = if (msg.role == MessageRole.USER || msg.role == MessageRole.ASSISTANT) {
+                            { onRegenerateFrom(msg.id) }
+                        } else {
+                            null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
 
@@ -219,23 +283,4 @@ private fun isEmbeddedInSwarm(
     val endIdx = messages.drop(swarmIdx + 1).indexOfFirst { it.role == MessageRole.USER }
     val rangeEnd = if (endIdx < 0) messages.size else swarmIdx + 1 + endIdx
     return msgIdx in (swarmIdx + 1) until rangeEnd && msg.role == MessageRole.TOOL
-}
-
-@Composable
-private fun ChatMessageBubble(msg: AgentMessage) {
-    if (msg.role == MessageRole.ASSISTANT && msg.content.isBlank()) return
-    val isUser = msg.role == MessageRole.USER
-    Box(Modifier.fillMaxWidth(), contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart) {
-        Surface(
-            modifier = Modifier.widthIn(max = 300.dp),
-            shape = RoundedCornerShape(18.dp, 18.dp, if (isUser) 18.dp else 6.dp, if (isUser) 6.dp else 18.dp),
-            color = when (msg.role) {
-                MessageRole.USER -> CoworkTokens.Mint.copy(alpha = 0.16f)
-                MessageRole.SYSTEM -> CoworkTokens.SurfaceElevated
-                else -> CoworkTokens.Surface
-            },
-        ) {
-            Text(msg.content, Modifier.padding(14.dp, 10.dp), color = CoworkTokens.TextPrimary)
-        }
-    }
 }

@@ -26,6 +26,8 @@
     <string name="agent_hint_focused">Ask anything…</string>
     <string name="agent_empty_title">Cowork agents ready</string>
     <string name="agent_empty_hint">Configure API in Settings, then describe a task below.</string>
+    <string name="agent_empty_settings_link">Configure API in Settings</string>
+    <string name="agent_empty_settings_suffix">, then describe a task below.</string>
     <string name="agent_api_required">Add API key, base URL, and model in Settings to chat.</string>
     <string name="agent_working">Agents working…</string>
     <string name="stop_agent">Stop</string>
@@ -115,4 +117,21 @@
     <string name="rootfs_meta">Size: 3.4 GB · Desktop: XFCE4 · User: coworker (sudo nopasswd)</string>
     <string name="container_health">Container Health</string>
     <string name="container_running">Running</string>
+    <string name="chat_new_conversation">New chat</string>
+    <string name="chat_export">Export</string>
+    <string name="chat_export_title">Cowork chat transcript</string>
+    <string name="chat_action_copy">Copy</string>
+    <string name="chat_action_edit">Edit</string>
+    <string name="chat_action_regenerate">Regenerate</string>
+    <string name="chat_edit_title">Edit message</string>
+    <string name="chat_edit_save">Save &amp; resend</string>
+    <string name="chat_cleared">Started a new conversation</string>
+    <string name="chat_copied">Copied to clipboard</string>
+    <string name="chat_export_ready">Transcript ready to share</string>
+    <string name="chat_nothing_to_export">No messages to export</string>
+    <string name="composer_attach_file">Attach file</string>
+    <string name="composer_attach_artifact">From artifacts</string>
+    <string name="composer_add_context">Add context block</string>
+    <string name="composer_attach_menu">Add attachment or context</string>
+    <string name="composer_context_template">Context:\n\n</string>
 </resources>

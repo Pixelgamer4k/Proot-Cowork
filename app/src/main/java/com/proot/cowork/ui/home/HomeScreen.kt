@@ -1,5 +1,6 @@
 package com.proot.cowork.ui.home
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -82,12 +83,44 @@ fun HomeScreen(
         if (uri != null) viewModel.importFromUri(uri)
     }
 
+    val attachLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) viewModel.onAttachFile(uri)
+    }
+
+    val artifactFiles = remember(uiState.messages.size) {
+        settingsRepository.getArtifactsDir()
+            .listFiles()
+            ?.filter { it.isFile }
+            ?.map { it.name }
+            ?.sorted()
+            ?.takeLast(12)
+            .orEmpty()
+    }
+
+    val shareContext = LocalContext.current
+
+    LaunchedEffect(uiState.shareTranscriptUri) {
+        val uri = uiState.shareTranscriptUri ?: return@LaunchedEffect
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/markdown"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, shareContext.getString(com.proot.cowork.R.string.chat_export_title))
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        shareContext.startActivity(Intent.createChooser(intent, shareContext.getString(com.proot.cowork.R.string.chat_export)))
+        viewModel.clearShareTranscriptUri()
+    }
+
     LaunchedEffect(uiState.importError) {
         uiState.importError?.let { snackbarHostState.showSnackbar(it); viewModel.clearImportError() }
     }
 
     LaunchedEffect(uiState.chatError) {
         uiState.chatError?.let { snackbarHostState.showSnackbar(it); viewModel.clearChatError() }
+    }
+
+    LaunchedEffect(uiState.chatSnackbar) {
+        uiState.chatSnackbar?.let { snackbarHostState.showSnackbar(it); viewModel.clearChatSnackbar() }
     }
 
     val composerBottomPadding = with(density) { composerHeightPx.toDp() }
@@ -153,6 +186,12 @@ fun HomeScreen(
                         onApprovePlan = viewModel::onApprovePlan,
                         onRejectPlan = viewModel::onRejectPlan,
                         onCancelSubtask = viewModel::onCancelSubtask,
+                        onNavigateToSettings = onNavigateToSettings,
+                        onNewConversation = viewModel::onClearConversation,
+                        onExportTranscript = viewModel::onExportTranscript,
+                        onMessageCopied = viewModel::onMessageCopied,
+                        onEditUserMessage = viewModel::onEditUserMessage,
+                        onRegenerateFrom = viewModel::onRegenerateFrom,
                     )
                     CoworkTab.Agents -> AgentsTabContent(
                         agentStates = uiState.agentStates,
@@ -184,6 +223,10 @@ fun HomeScreen(
                     executionMode = uiState.executionMode,
                     onModeChange = viewModel::onModeChange,
                     onFocusChange = { },
+                    artifactFileNames = artifactFiles,
+                    onPickFile = { attachLauncher.launch(arrayOf("*/*", "text/*", "application/*")) },
+                    onAttachArtifact = viewModel::onAttachArtifact,
+                    onAddContextBlock = viewModel::onAddContextBlock,
                     modifier = Modifier
                         .fillMaxWidth()
                         .imePadding()

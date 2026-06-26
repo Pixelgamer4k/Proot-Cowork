@@ -12,8 +12,8 @@ android {
         applicationId = "com.proot"
         minSdk = 26
         targetSdk = 35
-        versionName = "0.15.0-agent-control"
-        versionCode = 64
+        versionName = "0.16.0-chat-ux"
+        versionCode = 65
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
