@@ -19,6 +19,7 @@ import com.proot.cowork.domain.agent.MessageRole
 import com.proot.cowork.domain.agent.AgentRunController
 import com.proot.cowork.domain.agent.DEFAULT_MAX_TOOL_CALLS
 import com.proot.cowork.domain.agent.ShellCommandLogEntry
+import com.proot.cowork.domain.agent.SwarmAgentState
 import com.proot.cowork.domain.agent.SwarmAgentType
 import com.proot.cowork.domain.agent.PlanStep
 import com.proot.cowork.domain.agent.SwarmOutputParser
