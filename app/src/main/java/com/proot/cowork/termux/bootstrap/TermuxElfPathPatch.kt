@@ -22,7 +22,7 @@ object TermuxElfPathPatch {
     private fun isPythonRuntimeBinary(name: String): Boolean =
         name == "python3.13" || name == "python3" || name.startsWith("libpython")
 
-    /** lib-dynload/*.so must never be prefix-patched — accidental matches corrupt ELF shdrs. */
+    // lib-dynload native modules must never be prefix-patched; accidental matches corrupt ELF shdrs.
     private fun shouldSkipElfBinaryPatch(file: File, prefix: File): Boolean {
         if (isPythonRuntimeBinary(file.name)) return true
         val prefixPath = prefix.absolutePath
