@@ -38,7 +38,10 @@ class ProotCoworkApp : Application() {
         DebugStatusWriter.init(this)
         createNotificationChannels()
         appScope.launch {
-            ScheduleRepository(this@ProotCoworkApp).reschedulePending()
+            runCatching { ScheduleRepository(this@ProotCoworkApp).reschedulePending() }
+                .onFailure { e ->
+                    android.util.Log.e("ProotCoworkApp", "schedule reschedule failed", e)
+                }
             if (TERMUX_STACK_DESKTOP) {
                 try {
                     prootContainerRepository.repairStateOnStartup()

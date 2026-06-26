@@ -97,7 +97,10 @@ class ScheduleRepository(context: Context) {
         val all = readAll()
         _tasks.value = all.sortedBy { it.triggerAtMillis }
         all.filter { it.status == ScheduleStatus.PENDING }.forEach { task ->
-            ScheduleWorkScheduler.enqueue(appContext, task)
+            runCatching { ScheduleWorkScheduler.enqueue(appContext, task) }
+                .onFailure { e ->
+                    android.util.Log.e("ScheduleRepository", "reschedule failed for ${task.id}", e)
+                }
         }
     }
 
