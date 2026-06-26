@@ -110,16 +110,21 @@ class ScheduleRepository(context: Context) {
         return runCatching {
             val arr = JSONArray(storeFile.readText())
             (0 until arr.length()).mapNotNull { i ->
-                val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                ScheduledTask(
-                    id = o.getString("id"),
-                    prompt = o.getString("prompt"),
-                    triggerAtMillis = o.getLong("triggerAtMillis"),
-                    createdAtMillis = o.optLong("createdAtMillis", o.getLong("triggerAtMillis")),
-                    status = ScheduleStatus.valueOf(o.optString("status", ScheduleStatus.PENDING.name)),
-                    lastRunAtMillis = o.optLong("lastRunAtMillis").takeIf { o.has("lastRunAtMillis") && !o.isNull("lastRunAtMillis") },
-                    lastError = o.optString("lastError").takeIf { it.isNotBlank() },
-                )
+                runCatching {
+                    val o = arr.getJSONObject(i)
+                    val status = runCatching {
+                        ScheduleStatus.valueOf(o.optString("status", ScheduleStatus.PENDING.name))
+                    }.getOrDefault(ScheduleStatus.PENDING)
+                    ScheduledTask(
+                        id = o.getString("id"),
+                        prompt = o.getString("prompt"),
+                        triggerAtMillis = o.getLong("triggerAtMillis"),
+                        createdAtMillis = o.optLong("createdAtMillis", o.getLong("triggerAtMillis")),
+                        status = status,
+                        lastRunAtMillis = o.optLong("lastRunAtMillis").takeIf { o.has("lastRunAtMillis") && !o.isNull("lastRunAtMillis") },
+                        lastError = o.optString("lastError").takeIf { it.isNotBlank() },
+                    )
+                }.getOrNull()
             }
         }.getOrDefault(emptyList())
     }

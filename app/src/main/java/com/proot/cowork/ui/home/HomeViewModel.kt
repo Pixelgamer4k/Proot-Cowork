@@ -239,10 +239,23 @@ class HomeViewModel(
 
     fun onScheduleTask(prompt: String, triggerAtMillis: Long) {
         viewModelScope.launch {
-            val task = scheduleRepository.create(prompt, triggerAtMillis)
-            ScheduleWorkScheduler.enqueue(application, task)
-            localState.update {
-                it.copy(chatSnackbar = application.getString(com.proot.cowork.R.string.schedule_created))
+            runCatching {
+                val task = scheduleRepository.create(prompt, triggerAtMillis)
+                ScheduleWorkScheduler.enqueue(application, task)
+            }.onSuccess {
+                localState.update {
+                    it.copy(chatSnackbar = application.getString(com.proot.cowork.R.string.schedule_created))
+                }
+            }.onFailure { e ->
+                android.util.Log.e("HomeViewModel", "schedule enqueue failed", e)
+                localState.update {
+                    it.copy(
+                        chatSnackbar = application.getString(
+                            com.proot.cowork.R.string.schedule_enqueue_failed,
+                            e.message ?: "unknown error",
+                        ),
+                    )
+                }
             }
         }
     }

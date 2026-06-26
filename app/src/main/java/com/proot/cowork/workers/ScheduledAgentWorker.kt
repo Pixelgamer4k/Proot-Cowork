@@ -12,11 +12,19 @@ import com.proot.cowork.R
 import com.proot.cowork.data.llm.LlmEndpoint
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.schedule.ScheduleRepository
-import com.proot.cowork.service.AgentExecutionService
+import com.proot.cowork.domain.agent.AgentRunController
+import com.proot.cowork.domain.agent.CoworkAgentRunner
+import com.proot.cowork.domain.agent.ToolLimitReachedException
 import com.proot.cowork.termux.bootstrap.TermuxBootstrap
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/**
+ * Runs a scheduled Fast agent task inside this foreground worker.
+ * Does not start [com.proot.cowork.service.AgentExecutionService] — that throws
+ * ForegroundServiceStartNotAllowedException when the app is in the background.
+ */
 class ScheduledAgentWorker(
     appContext: Context,
     params: WorkerParameters,
@@ -33,7 +41,7 @@ class ScheduledAgentWorker(
             return Result.failure()
         }
 
-        setForeground(buildForegroundInfo(applicationContext))
+        setForeground(buildForegroundInfo(applicationContext, prompt))
 
         val bootstrapOk = withContext(Dispatchers.IO) {
             TermuxBootstrap.ensureInstalled(applicationContext)
@@ -44,19 +52,39 @@ class ScheduledAgentWorker(
         }
 
         repo.markRunning(taskId)
+        AgentRunController.beginRun()
+        val runner = CoworkAgentRunner(applicationContext)
         return try {
-            AgentExecutionService.startFastScheduled(applicationContext, prompt, taskId)
+            runner.runFast(
+                config = config,
+                userTask = prompt,
+                history = emptyList(),
+                isActive = { !isStopped && AgentRunController.isActive() },
+                onAssistantDelta = {},
+                onToolEvent = { msg ->
+                    setForeground(buildForegroundInfo(applicationContext, msg.toolName ?: "tool"))
+                },
+            )
+            repo.markDone(taskId)
             Result.success()
-        } catch (e: Exception) {
-            repo.markFailed(taskId, e.message ?: "Failed to start scheduled agent")
+        } catch (e: ToolLimitReachedException) {
+            repo.markFailed(taskId, "Tool call limit reached")
             Result.failure()
+        } catch (e: CancellationException) {
+            repo.markFailed(taskId, "Cancelled")
+            Result.failure()
+        } catch (e: Exception) {
+            repo.markFailed(taskId, e.message ?: "Scheduled run failed")
+            Result.failure()
+        } finally {
+            AgentRunController.requestStop()
         }
     }
 
-    private fun buildForegroundInfo(context: Context): ForegroundInfo {
+    private fun buildForegroundInfo(context: Context, detail: String): ForegroundInfo {
         val notification = NotificationCompat.Builder(context, ProotCoworkApp.CHANNEL_AGENT)
             .setContentTitle(context.getString(R.string.agent_notification_title))
-            .setContentText(context.getString(R.string.schedule_running))
+            .setContentText(context.getString(R.string.schedule_running_detail, detail.take(80)))
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setOngoing(true)
             .build()
