@@ -8,7 +8,7 @@ import java.io.File
 import java.util.zip.GZIPInputStream
 
 /**
- * Restores a clean Python runtime when [TermuxElfPathPatch] v3 corrupted libpython frozen modules.
+ * Restores a clean Python runtime when [TermuxElfPathPatch] corrupted lib-dynload modules.
  * CI bundles an unpatched copy in assets/python-runtime.tar.gz.
  */
 object TermuxPythonRepair {
@@ -17,7 +17,8 @@ object TermuxPythonRepair {
     private const val ASSET = "python-runtime.tar.gz"
 
     fun applyIfNeeded(context: Context, prefix: File, elfRoot: String, filesRoot: String): Boolean {
-        val marker = File(prefix, ".termux_python_repaired_v1")
+        File(prefix, ".termux_python_repaired_v1").delete()
+        val marker = File(prefix, ".termux_python_repaired_v2")
         if (marker.isFile && probePython(context, prefix)) return true
 
         if (!restoreFromAsset(context, prefix)) {
@@ -33,7 +34,7 @@ object TermuxPythonRepair {
         if (!ok) {
             Log.e(TAG, "python still broken after repair")
         } else {
-            Log.i(TAG, "python runtime repaired")
+            Log.i(TAG, "python runtime repaired (ctypes ok)")
         }
         return ok
     }
@@ -70,11 +71,9 @@ object TermuxPythonRepair {
         if (!python.canExecute()) return false
         val bash = TermuxBootstrap.shellExecutable(context) ?: return false
         val env = TermuxShellEnvironment.buildProcessEnvironment(context)
-        val pb = ProcessBuilder(
-            bash.absolutePath,
-            "-c",
-            "${python.absolutePath} -c pass",
-        )
+        val probeScript =
+            "${python.absolutePath} -c \"import ctypes; from proot_distro.cli import main\""
+        val pb = ProcessBuilder(bash.absolutePath, "-c", probeScript)
         pb.directory(TermuxBootstrap.homeDir(context))
         pb.environment().clear()
         pb.environment().putAll(env)

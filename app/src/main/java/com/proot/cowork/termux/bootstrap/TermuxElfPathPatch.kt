@@ -22,6 +22,14 @@ object TermuxElfPathPatch {
     private fun isPythonRuntimeBinary(name: String): Boolean =
         name == "python3.13" || name == "python3" || name.startsWith("libpython")
 
+    /** lib-dynload/*.so must never be prefix-patched — accidental matches corrupt ELF shdrs. */
+    private fun shouldSkipElfBinaryPatch(file: File, prefix: File): Boolean {
+        if (isPythonRuntimeBinary(file.name)) return true
+        val prefixPath = prefix.absolutePath
+        val path = file.absolutePath
+        return path.startsWith("$prefixPath/lib/python3.")
+    }
+
     /** Patch libapt/apt-key paths baked into libapt-pkg (com.termux -> com.proot). */
     fun patchLibAptIfNeeded(prefix: File, elfRoot: String, filesRoot: String, cacheRoot: String): Boolean {
         val marker = File(prefix, ".termux_libapt_patched_v1")
@@ -81,9 +89,9 @@ object TermuxElfPathPatch {
         roots.filter { it.isDirectory }.forEach { dir ->
             dir.walkTopDown().forEach { file ->
                 if (!file.isFile) return@forEach
+                if (shouldSkipElfBinaryPatch(file, prefix)) return@forEach
                 if (file.name.startsWith("libapt")) return@forEach
                 if (file.name == "apt" || file.name == "apt.real") return@forEach
-                if (isPythonRuntimeBinary(file.name)) return@forEach
                 if (!file.name.endsWith(".so") && !isElf(file)) return@forEach
                 replacements.forEach { (from, to) ->
                     patched += patchFile(file, from, to)
