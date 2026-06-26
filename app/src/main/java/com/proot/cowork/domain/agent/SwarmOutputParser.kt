@@ -25,7 +25,7 @@ object SwarmOutputParser {
             if (msg.toolName == "web_fetch") {
                 chips += SummaryChip("🌐", "Web research (${body.length.coerceAtMost(999)} chars)")
             }
-            narratives += extractNarrative(body)
+            extractNarrative(body)?.let { narratives += it }
         }
 
         messages.filter { it.role == MessageRole.ASSISTANT }.forEach { msg ->
