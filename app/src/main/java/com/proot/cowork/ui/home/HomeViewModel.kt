@@ -94,9 +94,11 @@ data class HomeUiState(
     val pendingSkillWrite: PendingSkillWrite? = null,
     val skillSaveOffer: SkillSaveOffer? = null,
     val guestFiles: List<GuestFileEntry> = emptyList(),
-    val filesPath: String = GuestPaths.ARTIFACTS_DIR,
+    val filesPath: String = GuestPaths.ROOT,
     val filesLoading: Boolean = false,
     val filesError: String? = null,
+    val filesSelectionMode: Boolean = false,
+    val filesSelectedPaths: Set<String> = emptySet(),
     val shareArtifactUri: Uri? = null,
     val containerInstalled: Boolean = false,
     val selectedTab: CoworkTab = CoworkTab.Chat,
@@ -239,9 +241,8 @@ class HomeViewModel(
     }
 
     private suspend fun refreshGuestFiles() {
-        val path = localState.value.filesPath
-        localState.update { it.copy(filesLoading = true, filesError = null) }
-        guestFileRepository.ensureArtifactsDir()
+        val path = GuestPaths.normalize(localState.value.filesPath)
+        localState.update { it.copy(filesLoading = true, filesError = null, filesPath = path) }
         val result = guestFileRepository.listDirectory(path)
         localState.update { state ->
             result.fold(
@@ -268,21 +269,29 @@ class HomeViewModel(
         viewModelScope.launch { refreshGuestFiles() }
     }
 
-    fun onFilesNavigateUp() {
-        val parent = GuestFileRepository.parentPath(localState.value.filesPath) ?: return
-        localState.update { it.copy(filesPath = parent) }
+    fun onFilesNavigateToPath(path: String) {
+        localState.update {
+            it.copy(
+                filesPath = GuestPaths.normalize(path),
+                filesSelectionMode = false,
+                filesSelectedPaths = emptySet(),
+            )
+        }
         viewModelScope.launch { refreshGuestFiles() }
     }
 
-    fun onFilesGoHome() {
-        localState.update { it.copy(filesPath = GuestPaths.ARTIFACTS_DIR) }
-        viewModelScope.launch { refreshGuestFiles() }
+    fun onFilesNavigateUp() {
+        val parent = GuestFileRepository.parentPath(localState.value.filesPath) ?: return
+        onFilesNavigateToPath(parent)
+    }
+
+    fun onFilesGoRoot() {
+        onFilesNavigateToPath(GuestPaths.ROOT)
     }
 
     fun onFilesOpenEntry(entry: GuestFileEntry) {
         if (entry.isDirectory) {
-            localState.update { it.copy(filesPath = entry.guestPath) }
-            viewModelScope.launch { refreshGuestFiles() }
+            onFilesNavigateToPath(entry.guestPath)
         } else {
             viewModelScope.launch {
                 val (name, snippet) = guestFileRepository.readTextSnippet(entry.guestPath)
@@ -295,11 +304,52 @@ class HomeViewModel(
         }
     }
 
-    fun onFilesNewFolder() {
+    fun onFilesToggleSelect(entry: GuestFileEntry) {
+        localState.update { state ->
+            val next = state.filesSelectedPaths.toMutableSet()
+            if (entry.guestPath in next) next.remove(entry.guestPath) else next.add(entry.guestPath)
+            state.copy(
+                filesSelectedPaths = next,
+                filesSelectionMode = next.isNotEmpty() || state.filesSelectionMode,
+            )
+        }
+    }
+
+    fun onFilesEnterSelectionMode() {
+        localState.update { it.copy(filesSelectionMode = true) }
+    }
+
+    fun onFilesExitSelectionMode() {
+        localState.update { it.copy(filesSelectionMode = false, filesSelectedPaths = emptySet()) }
+    }
+
+    fun onFilesShareSelected() {
+        val path = localState.value.filesSelectedPaths.firstOrNull() ?: return
+        onShareArtifact(path)
+    }
+
+    fun onFilesDeleteSelected() {
         viewModelScope.launch {
-            val name = "folder_${System.currentTimeMillis()}"
+            val paths = localState.value.filesSelectedPaths.toList()
+            paths.forEach { guestFileRepository.delete(it) }
+            onFilesExitSelectionMode()
+            refreshGuestFiles()
+            if (paths.isNotEmpty()) {
+                localState.update {
+                    it.copy(chatSnackbar = application.getString(com.proot.cowork.R.string.files_deleted))
+                }
+            }
+        }
+    }
+
+    fun onFilesCreateFolder(name: String) {
+        viewModelScope.launch {
             if (guestFileRepository.createDirectory(localState.value.filesPath, name)) {
                 refreshGuestFiles()
+            } else {
+                localState.update {
+                    it.copy(chatSnackbar = application.getString(com.proot.cowork.R.string.files_folder_create_failed))
+                }
             }
         }
     }
@@ -995,7 +1045,7 @@ class HomeViewModel(
     }
 
     fun onOpenBrowser() {
-        localState.update { it.copy(filesPath = GuestPaths.ARTIFACTS_DIR) }
+        onFilesNavigateToPath(GuestPaths.ROOT)
         selectTab(CoworkTab.Files)
     }
 

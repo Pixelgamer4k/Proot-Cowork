@@ -122,7 +122,12 @@
     <string name="status_pending">Pending</string>
     <string name="status_done">Done</string>
     <string name="status_failed">Failed</string>
-    <string name="files_empty">This folder is empty. Upload files or take a desktop screenshot.</string>
+    <string name="files_empty">This folder is empty.</string>
+    <string name="files_selected_count">%1$d selected</string>
+    <string name="files_cancel_select">Cancel</string>
+    <string name="files_folder_name_hint">Folder name</string>
+    <string name="files_create">Create</string>
+    <string name="files_folder_create_failed">Could not create folder.</string>
     <string name="files_actions_hint">Tap folders to open. Tap files to attach to chat. Long-press or share to export.</string>
     <string name="files_home">Artifacts home</string>
     <string name="files_up">Up</string>

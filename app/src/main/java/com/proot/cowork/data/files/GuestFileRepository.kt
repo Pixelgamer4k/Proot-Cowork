@@ -33,10 +33,11 @@ class GuestFileRepository(
     suspend fun ensureArtifactsDir(): ShellResult = shell.run(GuestPaths.ensureArtifactsCmd())
 
     suspend fun listDirectory(path: String): Result<List<GuestFileEntry>> = withContext(Dispatchers.IO) {
-        if (!GuestPaths.isAllowed(path)) {
+        val normalizedPath = GuestPaths.normalize(path)
+        if (!GuestPaths.isAllowed(normalizedPath)) {
             return@withContext Result.failure(IllegalArgumentException("Path not allowed: $path"))
         }
-        val quoted = shellQuote(path)
+        val quoted = shellQuote(normalizedPath)
         val cmd = """
             python3 -c '
 import json, os, sys
@@ -75,7 +76,7 @@ print(json.dumps(entries))
                     add(
                         GuestFileEntry(
                             name = name,
-                            guestPath = joinPath(path, name),
+                            guestPath = joinPath(normalizedPath, name),
                             isDirectory = obj.getBoolean("dir"),
                             sizeBytes = obj.getLong("size"),
                             lastModified = obj.getLong("mtime") * 1000L,
@@ -178,19 +179,39 @@ print(json.dumps(entries))
 
     companion object {
         fun joinPath(parent: String, name: String): String {
-            val base = parent.trimEnd('/')
-            return if (base.isEmpty()) name else "$base/$name"
+            val base = GuestPaths.normalize(parent)
+            val child = name.trim().trim('/')
+            if (child.isEmpty()) return base
+            return if (base == GuestPaths.ROOT) "/$child" else "$base/$child"
         }
 
         fun parentPath(path: String): String? {
-            val trimmed = path.trimEnd('/')
+            val trimmed = GuestPaths.normalize(path)
+            if (trimmed == GuestPaths.ROOT) return null
             val idx = trimmed.lastIndexOf('/')
-            return if (idx <= 0) null else trimmed.substring(0, idx)
+            return if (idx <= 0) GuestPaths.ROOT else trimmed.substring(0, idx)
+        }
+
+        fun breadcrumbSegments(path: String): List<Pair<String, String>> {
+            val normalized = GuestPaths.normalize(path)
+            if (normalized == GuestPaths.ROOT) {
+                return listOf("root" to GuestPaths.ROOT)
+            }
+            val parts = normalized.removePrefix("/").split('/')
+            var accum = ""
+            return buildList {
+                parts.forEach { part ->
+                    accum = if (accum.isEmpty()) "/$part" else "$accum/$part"
+                    add(part to accum)
+                }
+            }
         }
 
         fun formatSize(bytes: Long): String = formatSizeStatic(bytes)
 
         fun formatDate(millis: Long): String = formatDateStatic(millis)
+
+        fun formatShortDate(millis: Long): String = formatShortDateStatic(millis)
 
         private fun formatSizeStatic(bytes: Long): String {
             if (bytes < 1024) return "$bytes B"
@@ -200,6 +221,9 @@ print(json.dumps(entries))
 
         private fun formatDateStatic(millis: Long): String =
             SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(millis))
+
+        private fun formatShortDateStatic(millis: Long): String =
+            SimpleDateFormat("MMM d", Locale.getDefault()).format(Date(millis))
 
         private fun shellQuote(value: String): String =
             "'" + value.replace("'", "'\\''") + "'"

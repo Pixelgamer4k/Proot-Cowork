@@ -12,8 +12,8 @@ android {
         applicationId = "com.proot"
         minSdk = 26
         targetSdk = 35
-        versionName = "0.20.0-guest-browser"
-        versionCode = 74
+        versionName = "0.20.1-file-browser"
+        versionCode = 75
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
