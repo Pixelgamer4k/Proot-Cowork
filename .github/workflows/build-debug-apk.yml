@@ -29,7 +29,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: third_party/termux-x11
-          key: termux-x11-phoshdroid-${{ hashFiles('scripts/setup-termux-stack.sh', 'scripts/patch-termux-x11-embed.sh') }}
+          key: termux-x11-phoshdroid-${{ hashFiles('scripts/setup-termux-stack.sh', 'scripts/patch-termux-x11-embed.sh', 'scripts/patch-termux-terminal-view.sh') }}
           restore-keys: |
             termux-x11-phoshdroid-
 
@@ -41,6 +41,9 @@ jobs:
 
       - name: Verify termux-x11 embed patches
         run: grep -q COWORK_TRIGGER_CALLBACK_NULL third_party/termux-x11/app/src/main/java/com/termux/x11/LorieView.java
+
+      - name: Verify terminal-view live-compose patch
+        run: grep -q COWORK_LIVE_COMPOSE_COMMIT third_party/termux-app/terminal-view/src/main/java/com/termux/view/TerminalView.java
 
       - name: Fetch UserLAnd runtime
         run: bash scripts/fetch-userland-runtime.sh

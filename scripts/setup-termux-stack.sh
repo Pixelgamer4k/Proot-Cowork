@@ -56,5 +56,6 @@ if [[ ! -d "$APP_DIR/.git" ]]; then
 fi
 
 bash "$ROOT/scripts/patch-termux-x11-embed.sh"
+bash "$ROOT/scripts/patch-termux-terminal-view.sh"
 
 echo "==> termux-x11 + termux-app ready"

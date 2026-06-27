@@ -24,13 +24,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.proot.cowork.R
 import com.proot.cowork.domain.desktop.TermuxStackSession
-import com.proot.cowork.termux.terminal.CoworkTerminalView
 import com.proot.cowork.termux.terminal.CoworkTerminalViewClient
 import com.proot.cowork.termux.terminal.ProotGuestTerminalController
 import com.proot.cowork.ui.design.CoworkTokens
+import com.termux.view.TerminalView
 
 private class TerminalSurfaceHolder {
-    var terminalView: CoworkTerminalView? = null
+    var terminalView: TerminalView? = null
     var viewClient: CoworkTerminalViewClient? = null
 }
 
@@ -98,7 +98,7 @@ fun EmbeddedProotTerminal(
                 .weight(1f)
                 .fillMaxWidth(),
             factory = { ctx ->
-                CoworkTerminalView(ctx, null).apply {
+                TerminalView(ctx, null).apply {
                     setBackgroundColor(Color.parseColor("#0D0D0D"))
                     val client = CoworkTerminalViewClient(this)
                     setTerminalViewClient(client)
