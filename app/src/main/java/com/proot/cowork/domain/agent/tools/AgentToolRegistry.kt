@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Base64
 import com.proot.cowork.data.proot.ProotGuestShellExecutor
 import com.proot.cowork.data.proot.ShellResult
+import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.skills.SkillRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -18,8 +19,10 @@ data class ToolInvocation(
 )
 
 class AgentToolRegistry(context: Context) {
+    private val appContext = context.applicationContext
     private val shell = ProotGuestShellExecutor(context)
     private val skills = SkillRepository(context)
+    private val settings = SettingsRepository(appContext)
     private val http = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS)
@@ -34,6 +37,10 @@ class AgentToolRegistry(context: Context) {
         SkillTools.NAME_LIST -> SkillTools.list(skills, invocation.arguments)
         SkillTools.NAME_VIEW -> SkillTools.view(skills, invocation.arguments)
         SkillTools.NAME_MANAGE -> SkillTools.manage(skills, invocation.arguments)
+        SlackTool.NAME -> {
+            val webhook = settings.getAgentSettingsSnapshot().slackWebhookUrl
+            SlackTool.execute(webhook, invocation.arguments)
+        }
         else -> "Unknown tool: ${invocation.name}"
     }
 
@@ -46,6 +53,7 @@ class AgentToolRegistry(context: Context) {
         put(SkillTools.listDefinition())
         put(SkillTools.viewDefinition())
         put(SkillTools.manageDefinition())
+        put(SlackTool.definition())
     }
 
     fun toolsForAgent(agent: com.proot.cowork.domain.agent.SwarmAgentType): org.json.JSONArray {
@@ -62,7 +70,7 @@ class AgentToolRegistry(context: Context) {
             com.proot.cowork.domain.agent.SwarmAgentType.Validator ->
                 setOf(ProotShellTool.NAME, FileSystemTool.NAME_READ, SkillTools.NAME_LIST, SkillTools.NAME_VIEW)
             com.proot.cowork.domain.agent.SwarmAgentType.Slack ->
-                setOf(ProotShellTool.NAME, SkillTools.NAME_LIST)
+                setOf(SlackTool.NAME, ProotShellTool.NAME, SkillTools.NAME_LIST)
         }
         return org.json.JSONArray().apply {
             for (i in 0 until all.length()) {

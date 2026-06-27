@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import com.proot.cowork.userland.UserlandConfig
 import com.proot.cowork.userland.UserlandMigration
+import com.proot.cowork.domain.agent.DEFAULT_MAX_AGENT_POOL
+import com.proot.cowork.domain.agent.DEFAULT_MAX_TOOL_CALLS
+import androidx.datastore.preferences.core.intPreferencesKey
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "proot_cowork_prefs")
 
@@ -22,6 +25,12 @@ data class LlmConfig(
     val baseUrl: String = "https://openrouter.ai/api/v1",
     val apiKey: String = "",
     val model: String = "openrouter/owl-alpha",
+)
+
+data class AgentSettings(
+    val maxAgentPool: Int = DEFAULT_MAX_AGENT_POOL,
+    val maxToolCalls: Int = DEFAULT_MAX_TOOL_CALLS,
+    val slackWebhookUrl: String = "",
 )
 
 data class RootfsState(
@@ -53,6 +62,9 @@ class SettingsRepository(private val context: Context) {
         val ROOTFS_NAME = stringPreferencesKey("rootfs_name")
         val IMPORTING = booleanPreferencesKey("rootfs_importing")
         val IMPORT_PROGRESS = floatPreferencesKey("rootfs_import_progress")
+        val MAX_AGENT_POOL = intPreferencesKey("max_agent_pool")
+        val MAX_TOOL_CALLS = intPreferencesKey("max_tool_calls")
+        val SLACK_WEBHOOK = "slack_webhook_url"
     }
 
     val llmConfig: Flow<LlmConfig> = context.dataStore.data.map { prefs ->
@@ -64,6 +76,28 @@ class SettingsRepository(private val context: Context) {
     }
 
     suspend fun getLlmConfigSnapshot(): LlmConfig = llmConfig.first()
+
+    val agentSettings: Flow<AgentSettings> = context.dataStore.data.map { prefs ->
+        AgentSettings(
+            maxAgentPool = prefs[Keys.MAX_AGENT_POOL] ?: DEFAULT_MAX_AGENT_POOL,
+            maxToolCalls = prefs[Keys.MAX_TOOL_CALLS] ?: DEFAULT_MAX_TOOL_CALLS,
+            slackWebhookUrl = securePrefs.getString(Keys.SLACK_WEBHOOK, "") ?: "",
+        )
+    }
+
+    suspend fun getAgentSettingsSnapshot(): AgentSettings = agentSettings.first()
+
+    suspend fun saveAgentSettings(
+        maxAgentPool: Int,
+        maxToolCalls: Int,
+        slackWebhookUrl: String,
+    ) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.MAX_AGENT_POOL] = maxAgentPool.coerceIn(1, 6)
+            prefs[Keys.MAX_TOOL_CALLS] = maxToolCalls.coerceIn(5, 200)
+        }
+        securePrefs.edit().putString(Keys.SLACK_WEBHOOK, slackWebhookUrl.trim()).apply()
+    }
 
     val rootfsState: Flow<RootfsState> = context.dataStore.data.map { prefs ->
         RootfsState(

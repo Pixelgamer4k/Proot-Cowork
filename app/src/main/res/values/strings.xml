@@ -167,6 +167,12 @@
     <string name="settings_delete_rootfs">Delete container</string>
     <string name="container_running">Running</string>
     <string name="container_stopped">Stopped</string>
+    <string name="settings_agents_section">AGENT LIMITS &amp; INTEGRATIONS</string>
+    <string name="settings_max_agent_pool">Max parallel agents (1–6)</string>
+    <string name="settings_max_tool_calls">Max tool calls per run (5–200)</string>
+    <string name="settings_slack_webhook">Slack incoming webhook URL</string>
+    <string name="settings_slack_hint">Used by the Slack swarm agent via slack_notify. Create a webhook in your Slack workspace app settings.</string>
+    <string name="chat_threads">Chats</string>
     <string name="chat_new_conversation">New chat</string>
     <string name="chat_export">Export</string>
     <string name="chat_export_title">Cowork chat transcript</string>

@@ -29,7 +29,11 @@ object AgentExecutionSession {
     private val _snapshot = MutableStateFlow(AgentExecutionSnapshot())
     val snapshot: StateFlow<AgentExecutionSnapshot> = _snapshot.asStateFlow()
 
-    fun resetForNewRun(mode: ExecutionMode) {
+    fun resetForNewRun(
+        mode: ExecutionMode,
+        maxAgentPool: Int = DEFAULT_MAX_AGENT_POOL,
+        maxToolCalls: Int = DEFAULT_MAX_TOOL_CALLS,
+    ) {
         AgentRunController.beginRun()
         _snapshot.update {
             AgentExecutionSnapshot(
@@ -37,8 +41,9 @@ object AgentExecutionSession {
                 mode = mode,
                 notificationText = "Starting agents…",
                 agentStates = SwarmAgentType.entries.map { SwarmAgentState(it) },
+                maxAgentPool = maxAgentPool.coerceIn(1, 6),
                 toolCallCount = 0,
-                maxToolCalls = DEFAULT_MAX_TOOL_CALLS,
+                maxToolCalls = maxToolCalls.coerceIn(5, 200),
                 toolLimitReached = false,
                 shellCommandLog = emptyList(),
                 stopRequested = false,

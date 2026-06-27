@@ -97,6 +97,7 @@ class CoworkAgentRunner(private val context: Context) {
         onSubtaskUpdate: (List<SwarmTask>) -> Unit,
         onAgentStates: (List<SwarmAgentState>) -> Unit,
         onAssistantMessage: (String) -> Unit,
+        onAssistantDelta: (String) -> Unit = {},
         onToolEvent: (AgentMessage) -> Unit,
     ): String = coroutineScope {
         val semaphore = Semaphore(maxPool.coerceIn(1, 6))
@@ -145,7 +146,7 @@ class CoworkAgentRunner(private val context: Context) {
                             userMessage = "Swarm step ${task.id}: ${task.title}\nOriginal task: ${plan.userTask}",
                             isActive = isActive,
                             subtaskId = task.id,
-                            onAssistantDelta = {},
+                            onAssistantDelta = onAssistantDelta,
                             onToolEvent = onToolEvent,
                         )
                     } catch (e: CancellationException) {
@@ -212,25 +213,21 @@ class CoworkAgentRunner(private val context: Context) {
         val apiMessages = OpenAiCompatibleLlmClient.buildMessagesArray(systemPrompt, history, userMessage)
         val agentTools = tools.toolsForAgent(agent)
         var lastContent = ""
-        var lastEmitted = 0
         val maxRounds = AgentExecutionSession.snapshot.value.maxToolCalls.coerceAtLeast(1)
 
         repeat(maxRounds) {
             ensureActive(isActive, subtaskId)
             if (AgentExecutionSession.isToolLimitReached()) throw ToolLimitReachedException()
 
-            val result = OpenAiCompatibleLlmClient.complete(
+            val result = OpenAiCompatibleLlmClient.completeStreaming(
                 config = config,
                 messages = apiMessages,
                 tools = if (agentTools.length() > 0) agentTools else null,
                 temperature = if (agent == SwarmAgentType.Planner) 0.3 else 0.4,
+                isActive = isActive,
+                onDelta = onAssistantDelta,
             )
             lastContent = result.content
-            if (result.content.length > lastEmitted) {
-                val delta = result.content.substring(lastEmitted)
-                lastEmitted = result.content.length
-                onAssistantDelta(delta)
-            }
             if (result.toolCalls.isEmpty()) {
                 if (result.content.isNotBlank()) {
                     apiMessages.put(JSONObject().put("role", "assistant").put("content", result.content))
@@ -341,7 +338,7 @@ class CoworkAgentRunner(private val context: Context) {
             SwarmAgentType.Executor -> "You are the Executor. Run shell commands in proot to accomplish tasks."
             SwarmAgentType.Coder -> "You are the Coder. Use edit_and_test_code and shell tools."
             SwarmAgentType.Validator -> "You are the Validator. Verify outputs and report pass/fail."
-            SwarmAgentType.Slack -> "You are Slack notifications. Summarize progress via shell echo and short messages."
+            SwarmAgentType.Slack -> "You are Slack notifications. Post concise progress updates with slack_notify. Summarize milestones, not every shell line."
         }
         return if (skillsSuffix.isBlank()) base else "$base\n$skillsSuffix"
     }
@@ -436,46 +433,4 @@ class CoworkAgentRunner(private val context: Context) {
     }
 
     suspend fun testConnection(config: LlmConfig) = OpenAiCompatibleLlmClient.testConnection(config)
-}
-
-/** Legacy entry point — delegates to [CoworkAgentRunner]. */
-object CoworkKoogAgentRunner {
-    suspend fun streamChat(
-        config: LlmConfig,
-        mode: ExecutionMode,
-        history: List<AgentMessage>,
-        userMessage: String,
-        isActive: () -> Boolean,
-        onDelta: (String) -> Unit,
-    ): String {
-        val system = when (mode) {
-            ExecutionMode.SWARM -> "You are Cowork Swarm planner. Produce a numbered plan."
-            ExecutionMode.FAST -> "You are Cowork Fast agent. Respond concisely."
-        }
-        return OpenAiCompatibleLlmClient.streamChat(
-            config, system, history, userMessage,
-            temperature = if (mode == ExecutionMode.FAST) 0.3 else 0.5,
-            isActive = isActive,
-            onDelta = onDelta,
-        )
-    }
-
-    suspend fun testConnection(config: LlmConfig) = OpenAiCompatibleLlmClient.testConnection(config)
-
-    fun parseSwarmTasks(response: String, userTask: String): List<SwarmTask> {
-        val lines = response.lines()
-        val numbered = lines.mapNotNull { line ->
-            val trimmed = line.trim()
-            val match = Regex("^(\\d+)[.)]\\s+(.+)").find(trimmed)
-            match?.let { it.groupValues[1] to it.groupValues[2].trim() }
-        }
-        if (numbered.isEmpty()) {
-            return listOf(
-                SwarmTask("1", "Analyze: $userTask"),
-                SwarmTask("2", "Plan execution in proot"),
-                SwarmTask("3", "Execute and verify"),
-            )
-        }
-        return numbered.take(6).map { (id, title) -> SwarmTask(id, title) }
-    }
 }

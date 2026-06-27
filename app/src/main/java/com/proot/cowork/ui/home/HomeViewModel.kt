@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.proot.cowork.data.chat.ChatHistoryStore
+import com.proot.cowork.data.chat.ChatThreadMeta
 import com.proot.cowork.data.chat.ChatTranscriptExporter
 import com.proot.cowork.data.files.FileBrowserSort
 import com.proot.cowork.data.files.FilesSortOrder
@@ -109,6 +110,8 @@ data class HomeUiState(
     val containerInstalled: Boolean = false,
     val selectedTab: CoworkTab = CoworkTab.Chat,
     val composerArtifactNames: List<String> = emptyList(),
+    val chatThreads: List<ChatThreadMeta> = emptyList(),
+    val activeThreadId: String? = null,
 )
 
 class HomeViewModel(
@@ -128,6 +131,7 @@ class HomeViewModel(
     private var chatJob: Job? = null
     private var agentWasRunning = false
     private var lastUserTask: String? = null
+    private var activeThreadId: String? = null
 
     init {
         viewModelScope.launch {
@@ -147,22 +151,43 @@ class HomeViewModel(
         }
 
         viewModelScope.launch {
-            val saved = chatHistoryStore.load()
-            if (saved.messages.isNotEmpty()) {
+            chatHistoryStore.migrateLegacyIfNeeded()
+            val threads = chatHistoryStore.listThreads()
+            val threadId = threads.firstOrNull()?.id ?: chatHistoryStore.createThread().id
+            activeThreadId = threadId
+            val saved = chatHistoryStore.loadThread(threadId)
+            localState.update {
+                it.copy(
+                    messages = saved.messages,
+                    executionMode = saved.executionMode,
+                    chatThreads = threads.ifEmpty { chatHistoryStore.listThreads() },
+                    activeThreadId = threadId,
+                )
+            }
+        }
+
+        viewModelScope.launch {
+            settingsRepository.agentSettings.collect { agent ->
                 localState.update {
-                    it.copy(messages = saved.messages, executionMode = saved.executionMode)
+                    it.copy(
+                        maxAgentPool = agent.maxAgentPool,
+                        maxToolCalls = agent.maxToolCalls,
+                    )
                 }
             }
         }
 
         viewModelScope.launch {
             localState
-                .map { it.messages to it.executionMode }
+                .map { Triple(it.messages, it.executionMode, it.activeThreadId) }
                 .distinctUntilChanged()
                 .debounce(400)
-                .collect { (messages, mode) ->
+                .collect { (messages, mode, threadId) ->
+                    val id = threadId ?: activeThreadId ?: return@collect
                     if (messages.isNotEmpty()) {
-                        chatHistoryStore.save(messages, mode)
+                        chatHistoryStore.saveThread(id, messages, mode)
+                        val threads = chatHistoryStore.listThreads()
+                        localState.update { it.copy(chatThreads = threads) }
                     }
                 }
         }
@@ -658,22 +683,47 @@ class HomeViewModel(
         if (localState.value.isExecuting) onStop()
         SkillApprovalSession.clear()
         viewModelScope.launch {
-            chatHistoryStore.clear()
+            val meta = chatHistoryStore.createThread()
+            activeThreadId = meta.id
+            val threads = chatHistoryStore.listThreads()
+            lastUserTask = null
+            localState.update {
+                it.copy(
+                    messages = emptyList(),
+                    swarmResponse = null,
+                    swarmTasks = emptyList(),
+                    awaitingApproval = false,
+                    pendingPlan = null,
+                    skillSaveOffer = null,
+                    pendingSkillWrite = null,
+                    inputText = "",
+                    isExecuting = false,
+                    chatThreads = threads,
+                    activeThreadId = meta.id,
+                    chatSnackbar = application.getString(com.proot.cowork.R.string.chat_cleared),
+                )
+            }
         }
-        lastUserTask = null
-        localState.update {
-            it.copy(
-                messages = emptyList(),
-                swarmResponse = null,
-                swarmTasks = emptyList(),
-                awaitingApproval = false,
-                pendingPlan = null,
-                skillSaveOffer = null,
-                pendingSkillWrite = null,
-                inputText = "",
-                isExecuting = false,
-                chatSnackbar = application.getString(com.proot.cowork.R.string.chat_cleared),
-            )
+    }
+
+    fun onSelectThread(threadId: String) {
+        if (threadId == activeThreadId) return
+        if (localState.value.isExecuting) onStop()
+        viewModelScope.launch {
+            val saved = chatHistoryStore.loadThread(threadId)
+            activeThreadId = threadId
+            localState.update {
+                it.copy(
+                    messages = saved.messages,
+                    executionMode = saved.executionMode,
+                    activeThreadId = threadId,
+                    swarmResponse = null,
+                    swarmTasks = emptyList(),
+                    awaitingApproval = false,
+                    pendingPlan = null,
+                    skillSaveOffer = null,
+                )
+            }
         }
     }
 
@@ -1009,7 +1059,12 @@ class HomeViewModel(
                     }
                     ExecutionMode.FAST -> {
                         val historyForRun = history + userMsg
-                        AgentExecutionService.startFast(application, text, historyForRun)
+                        AgentExecutionService.startFast(
+                            application,
+                            text,
+                            historyForRun,
+                            localState.value.maxToolCalls,
+                        )
                         localState.update { it.copy(isExecuting = true) }
                     }
                 }
@@ -1049,7 +1104,13 @@ class HomeViewModel(
             )
         }
         AgentExecutionSession.clearApproval()
-        AgentExecutionService.startSwarm(application, plan, history, localState.value.maxAgentPool)
+        AgentExecutionService.startSwarm(
+            application,
+            plan,
+            history,
+            localState.value.maxAgentPool,
+            localState.value.maxToolCalls,
+        )
     }
 
     fun onRejectPlan() {

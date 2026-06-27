@@ -151,6 +151,34 @@ fun SettingsScreen(
                 }
             }
 
+            SettingsSectionHeader(Icons.Default.Layers, stringResource(R.string.settings_agents_section))
+            CoworkCard {
+                SettingsField(
+                    stringResource(R.string.settings_max_agent_pool),
+                    uiState.maxAgentPool.toString(),
+                    viewModel::onMaxAgentPoolChange,
+                )
+                Spacer(Modifier.height(12.dp))
+                SettingsField(
+                    stringResource(R.string.settings_max_tool_calls),
+                    uiState.maxToolCalls.toString(),
+                    viewModel::onMaxToolCallsChange,
+                )
+                Spacer(Modifier.height(12.dp))
+                SettingsField(
+                    stringResource(R.string.settings_slack_webhook),
+                    uiState.slackWebhookUrl,
+                    viewModel::onSlackWebhookChange,
+                    password = true,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.settings_slack_hint),
+                    color = CoworkTokens.TextMuted,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                )
+            }
+
             SettingsSectionHeader(Icons.Default.Storage, stringResource(R.string.settings_rootfs_section))
             CoworkCard {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {

@@ -103,6 +103,85 @@ object OpenAiCompatibleLlmClient {
         buffer.toString()
     }
 
+    suspend fun completeStreaming(
+        config: LlmConfig,
+        messages: JSONArray,
+        tools: JSONArray? = null,
+        temperature: Double = 0.4,
+        maxTokens: Int = 4096,
+        isActive: () -> Boolean = { true },
+        onDelta: (String) -> Unit,
+    ): LlmCompletionResult = withContext(Dispatchers.IO) {
+        val endpoint = LlmEndpoint.from(config)
+        val payload = JSONObject().apply {
+            put("model", config.model.trim())
+            put("stream", true)
+            put("temperature", temperature)
+            put("max_tokens", maxTokens)
+            put("messages", messages)
+            if (tools != null && tools.length() > 0) {
+                put("tools", tools)
+                put("tool_choice", "auto")
+            }
+        }
+        val request = buildRequest(endpoint, config.apiKey, payload.toString())
+        val contentBuffer = StringBuilder()
+        val toolBuilders = linkedMapOf<Int, StreamingToolCallBuilder>()
+        var finishReason: String? = null
+        http.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                val err = response.body?.string().orEmpty()
+                error("HTTP ${response.code}: ${err.take(400)}")
+            }
+            val source = response.body?.source() ?: error("Empty response body")
+            while (!source.exhausted()) {
+                if (!isActive()) break
+                val line = source.readUtf8Line() ?: continue
+                if (!line.startsWith("data: ")) continue
+                val data = line.removePrefix("data: ").trim()
+                if (data == "[DONE]") break
+                val choice = runCatching { JSONObject(data).optJSONArray("choices")?.optJSONObject(0) }
+                    .getOrNull() ?: continue
+                choice.optString("finish_reason").takeIf { it.isNotBlank() && it != "null" }?.let {
+                    finishReason = it
+                }
+                val delta = choice.optJSONObject("delta") ?: continue
+                val content = delta.optString("content")
+                if (content.isNotEmpty()) {
+                    contentBuffer.append(content)
+                    onDelta(content)
+                }
+                delta.optJSONArray("tool_calls")?.let { arr ->
+                    for (i in 0 until arr.length()) {
+                        val tc = arr.optJSONObject(i) ?: continue
+                        val index = tc.optInt("index", i)
+                        val builder = toolBuilders.getOrPut(index) { StreamingToolCallBuilder() }
+                        if (tc.has("id")) builder.id = tc.getString("id")
+                        tc.optJSONObject("function")?.let { fn ->
+                            if (fn.has("name")) builder.name = fn.getString("name")
+                            if (fn.has("arguments")) builder.arguments.append(fn.getString("arguments"))
+                        }
+                    }
+                }
+            }
+        }
+        val toolCalls = toolBuilders.toSortedMap().values.mapNotNull { builder ->
+            if (builder.name.isBlank()) return@mapNotNull null
+            LlmToolCall(
+                id = builder.id.ifBlank { "call_${builder.name}" },
+                name = builder.name,
+                arguments = builder.arguments.toString().ifBlank { "{}" },
+            )
+        }
+        LlmCompletionResult(contentBuffer.toString(), toolCalls, finishReason)
+    }
+
+    private class StreamingToolCallBuilder {
+        var id: String = ""
+        var name: String = ""
+        val arguments = StringBuilder()
+    }
+
     suspend fun complete(
         config: LlmConfig,
         messages: JSONArray,

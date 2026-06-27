@@ -224,6 +224,8 @@ fun HomeScreen(
                 when (tab) {
                     CoworkTab.Chat -> ChatTabContent(
                         messages = uiState.messages,
+                        chatThreads = uiState.chatThreads,
+                        activeThreadId = uiState.activeThreadId,
                         swarmResponse = uiState.swarmResponse,
                         isExecuting = uiState.isExecuting,
                         isApiConfigured = uiState.isApiConfigured,
@@ -242,6 +244,7 @@ fun HomeScreen(
                         onCancelSubtask = viewModel::onCancelSubtask,
                         onNavigateToSettings = onNavigateToSettings,
                         onNewConversation = viewModel::onClearConversation,
+                        onSelectThread = viewModel::onSelectThread,
                         onExportTranscript = viewModel::onExportTranscript,
                         onMessageCopied = viewModel::onMessageCopied,
                         onEditUserMessage = viewModel::onEditUserMessage,

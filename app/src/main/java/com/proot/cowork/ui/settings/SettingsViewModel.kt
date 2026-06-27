@@ -3,11 +3,13 @@ package com.proot.cowork.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.proot.cowork.data.llm.OpenAiCompatibleLlmClient
 import com.proot.cowork.data.prefs.LlmConfig
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.proot.ProotGuestShellExecutor
 import com.proot.cowork.data.prootcontainer.ProotContainerRepository
-import com.proot.cowork.domain.agent.CoworkKoogAgentRunner
+import com.proot.cowork.domain.agent.DEFAULT_MAX_AGENT_POOL
+import com.proot.cowork.domain.agent.DEFAULT_MAX_TOOL_CALLS
 import com.proot.cowork.domain.desktop.TERMUX_STACK_DESKTOP
 import com.proot.cowork.domain.proot.DesktopSession
 import com.proot.cowork.domain.proot.DesktopState
@@ -40,6 +42,9 @@ data class SettingsUiState(
     val memoryLabel: String = "—",
     val uptimeLabel: String = "—",
     val displayLabel: String = X11DisplayConfig.DISPLAY,
+    val maxAgentPool: Int = DEFAULT_MAX_AGENT_POOL,
+    val maxToolCalls: Int = DEFAULT_MAX_TOOL_CALLS,
+    val slackWebhookUrl: String = "",
 )
 
 class SettingsViewModel(
@@ -48,7 +53,8 @@ class SettingsViewModel(
     private val guestShell: ProotGuestShellExecutor,
 ) : ViewModel() {
 
-    private val formState = MutableStateFlow(Triple("", "", ""))
+    private val formState = MutableStateFlow(LlmFormState())
+    private val agentFormState = MutableStateFlow(AgentFormState())
     private val savedMessage = MutableStateFlow<String?>(null)
     private val connectionTestMessage = MutableStateFlow<String?>(null)
     private val isTestingConnection = MutableStateFlow(false)
@@ -67,9 +73,13 @@ class SettingsViewModel(
     val uiState: StateFlow<SettingsUiState> = combine(
         combine(
             settingsRepository.llmConfig,
+            settingsRepository.agentSettings,
             settingsRepository.rootfsState,
             formState,
-        ) { config, rootfs, form -> Triple(config, rootfs, form) },
+            agentFormState,
+        ) { config, agent, rootfs, form, agentForm ->
+            Quintuple(config, agent, rootfs, form, agentForm)
+        },
         combine(
             savedMessage,
             connectionTestMessage,
@@ -80,12 +90,16 @@ class SettingsViewModel(
             listOf(saved, testMsg, testing, deleting, delMsg)
         },
         healthState,
-    ) { (config, rootfs, form), flags, health ->
-        val (url, key, model) = form
+    ) { packed, flags, health ->
+        val config = packed.first
+        val agent = packed.second
+        val rootfs = packed.third
+        val form = packed.fourth
+        val agentForm = packed.fifth
         SettingsUiState(
-            baseUrl = url.ifEmpty { config.baseUrl },
-            apiKey = key.ifEmpty { config.apiKey },
-            model = model.ifEmpty { config.model },
+            baseUrl = form.baseUrl.ifEmpty { config.baseUrl },
+            apiKey = form.apiKey.ifEmpty { config.apiKey },
+            model = form.model.ifEmpty { config.model },
             savedMessage = flags[0] as String?,
             connectionTestMessage = flags[1] as String?,
             isTestingConnection = flags[2] as Boolean,
@@ -97,6 +111,9 @@ class SettingsViewModel(
             cpuLabel = health.cpuLabel,
             memoryLabel = health.memoryLabel,
             uptimeLabel = health.uptimeLabel,
+            maxAgentPool = agentForm.maxAgentPool ?: agent.maxAgentPool,
+            maxToolCalls = agentForm.maxToolCalls ?: agent.maxToolCalls,
+            slackWebhookUrl = agentForm.slackWebhookUrl.ifEmpty { agent.slackWebhookUrl },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsUiState())
 
@@ -105,22 +122,42 @@ class SettingsViewModel(
     }
 
     fun onBaseUrlChange(value: String) {
-        formState.update { (_, k, m) -> Triple(value, k, m) }
+        formState.update { it.copy(baseUrl = value) }
     }
 
     fun onApiKeyChange(value: String) {
-        formState.update { (u, _, m) -> Triple(u, value, m) }
+        formState.update { it.copy(apiKey = value) }
     }
 
     fun onModelChange(value: String) {
-        formState.update { (u, k, _) -> Triple(u, k, value) }
+        formState.update { it.copy(model = value) }
+    }
+
+    fun onMaxAgentPoolChange(value: String) {
+        val parsed = value.filter { it.isDigit() }.toIntOrNull()
+        agentFormState.update { it.copy(maxAgentPool = parsed) }
+    }
+
+    fun onMaxToolCallsChange(value: String) {
+        val parsed = value.filter { it.isDigit() }.toIntOrNull()
+        agentFormState.update { it.copy(maxToolCalls = parsed) }
+    }
+
+    fun onSlackWebhookChange(value: String) {
+        agentFormState.update { it.copy(slackWebhookUrl = value) }
     }
 
     fun save() {
         viewModelScope.launch {
             val state = uiState.value
             settingsRepository.saveLlmConfig(state.baseUrl, state.apiKey, state.model)
-            formState.value = Triple("", "", "")
+            settingsRepository.saveAgentSettings(
+                maxAgentPool = state.maxAgentPool,
+                maxToolCalls = state.maxToolCalls,
+                slackWebhookUrl = state.slackWebhookUrl,
+            )
+            formState.value = LlmFormState()
+            agentFormState.value = AgentFormState()
             savedMessage.value = "Settings saved"
         }
     }
@@ -130,7 +167,7 @@ class SettingsViewModel(
             val state = uiState.value
             isTestingConnection.value = true
             connectionTestMessage.value = null
-            val result = CoworkKoogAgentRunner.testConnection(
+            val result = OpenAiCompatibleLlmClient.testConnection(
                 LlmConfig(
                     baseUrl = state.baseUrl,
                     apiKey = state.apiKey,
@@ -244,6 +281,26 @@ print(f"CPU:{cpu:.1f}%|MEM:{used}/{total} MB|UP:{h:02d}:{m:02d}:{s:02d}")
         val cpuLabel: String,
         val memoryLabel: String,
         val uptimeLabel: String,
+    )
+
+    private data class LlmFormState(
+        val baseUrl: String = "",
+        val apiKey: String = "",
+        val model: String = "",
+    )
+
+    private data class AgentFormState(
+        val maxAgentPool: Int? = null,
+        val maxToolCalls: Int? = null,
+        val slackWebhookUrl: String = "",
+    )
+
+    private data class Quintuple<A, B, C, D, E>(
+        val first: A,
+        val second: B,
+        val third: C,
+        val fourth: D,
+        val fifth: E,
     )
 
     companion object {

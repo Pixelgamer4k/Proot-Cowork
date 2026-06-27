@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddComment
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.Icon
@@ -39,6 +40,12 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.proot.cowork.R
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.proot.cowork.data.chat.ChatThreadMeta
 import com.proot.cowork.domain.agent.AgentMessage
 import com.proot.cowork.domain.agent.MessageRole
 import com.proot.cowork.domain.agent.ShellCommandLogEntry
@@ -64,6 +71,8 @@ private val QUICK_PROMPTS = listOf(
 @Composable
 fun ChatTabContent(
     messages: List<AgentMessage>,
+    chatThreads: List<ChatThreadMeta>,
+    activeThreadId: String?,
     swarmResponse: SwarmResponse?,
     isExecuting: Boolean,
     isApiConfigured: Boolean,
@@ -82,6 +91,7 @@ fun ChatTabContent(
     onCancelSubtask: (String) -> Unit,
     onNavigateToSettings: () -> Unit,
     onNewConversation: () -> Unit,
+    onSelectThread: (String) -> Unit,
     onExportTranscript: () -> Unit,
     onMessageCopied: () -> Unit,
     onEditUserMessage: (String, String) -> Unit,
@@ -93,6 +103,8 @@ fun ChatTabContent(
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
+    var threadMenuOpen by remember { mutableStateOf(false) }
+    val activeThread = chatThreads.firstOrNull { it.id == activeThreadId }
     val visibleMessages = messages.filterNot { msg ->
         isEmbeddedInSwarm(msg, swarmResponse, messages)
     }
@@ -109,22 +121,48 @@ fun ChatTabContent(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = composerBottomPadding + 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        if (visibleMessages.isNotEmpty()) {
+        if (visibleMessages.isNotEmpty() || chatThreads.isNotEmpty()) {
             item(key = "chat-actions") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextButton(onClick = onExportTranscript) {
-                        Icon(Icons.Default.IosShare, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.size(6.dp))
-                        Text(stringResource(R.string.chat_export))
+                    Box {
+                        TextButton(onClick = { threadMenuOpen = true }) {
+                            Icon(Icons.Default.History, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.size(6.dp))
+                            Text(
+                                activeThread?.title ?: stringResource(R.string.chat_threads),
+                                maxLines = 1,
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = threadMenuOpen,
+                            onDismissRequest = { threadMenuOpen = false },
+                        ) {
+                            chatThreads.forEach { thread ->
+                                DropdownMenuItem(
+                                    text = { Text(thread.title, maxLines = 1) },
+                                    onClick = {
+                                        threadMenuOpen = false
+                                        onSelectThread(thread.id)
+                                    },
+                                )
+                            }
+                        }
                     }
-                    TextButton(onClick = onNewConversation) {
-                        Icon(Icons.Default.AddComment, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.size(6.dp))
-                        Text(stringResource(R.string.chat_new_conversation))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = onExportTranscript) {
+                            Icon(Icons.Default.IosShare, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.size(6.dp))
+                            Text(stringResource(R.string.chat_export))
+                        }
+                        TextButton(onClick = onNewConversation) {
+                            Icon(Icons.Default.AddComment, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.size(6.dp))
+                            Text(stringResource(R.string.chat_new_conversation))
+                        }
                     }
                 }
             }
