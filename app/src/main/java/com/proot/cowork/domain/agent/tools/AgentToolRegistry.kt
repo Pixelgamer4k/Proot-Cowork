@@ -46,11 +46,12 @@ class AgentToolRegistry(context: Context) {
         TodoTools.NAME_READ -> TodoTools.read(todos)
         WebTool.NAME -> {
             if (AgentRunContext.webFetchCount >= AgentRunContext.MAX_WEB_FETCH_PER_RUN) {
-                return "Error: web_fetch limit (${AgentRunContext.MAX_WEB_FETCH_PER_RUN}) reached. " +
+                "Error: web_fetch limit (${AgentRunContext.MAX_WEB_FETCH_PER_RUN}) reached. " +
                     "Use gathered notes and write the deliverable file."
+            } else {
+                AgentRunContext.webFetchCount++
+                WebTool.execute(shell, http, invocation.arguments)
             }
-            AgentRunContext.webFetchCount++
-            WebTool.execute(shell, http, invocation.arguments)
         }
         CodeTool.NAME -> CodeTool.execute(shell, invocation.arguments)
         SkillTools.NAME_LIST -> SkillTools.list(skills, invocation.arguments)

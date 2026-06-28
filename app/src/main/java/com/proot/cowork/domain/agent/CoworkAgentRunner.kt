@@ -11,6 +11,7 @@ import com.proot.cowork.data.skills.SkillRepository
 import com.proot.cowork.domain.agent.orchestration.ExecutionStage
 import com.proot.cowork.domain.agent.orchestration.ModerateTaskRunner
 import com.proot.cowork.domain.agent.orchestration.PlanWriter
+import com.proot.cowork.domain.agent.orchestration.ToolLoopRunner
 import com.proot.cowork.domain.agent.orchestration.StageValidator
 import com.proot.cowork.domain.agent.orchestration.SystemPromptBuilder
 import com.proot.cowork.domain.agent.orchestration.TaskClassifier
@@ -151,8 +152,19 @@ class CoworkAgentRunner(private val context: Context) {
         }
     }
 
-    private fun moderateToolLoop(): ToolLoopRunner = ToolLoopRunner { config, agent, systemPrompt, history, userMessage, isActive, onAssistantDelta, onToolEvent, toolFilter, maxRounds ->
-        runToolLoop(
+    private fun moderateToolLoop(): ToolLoopRunner = object : ToolLoopRunner {
+        override suspend fun run(
+            config: LlmConfig,
+            agent: SwarmAgentType,
+            systemPrompt: String,
+            history: List<AgentMessage>,
+            userMessage: String,
+            isActive: () -> Boolean,
+            onAssistantDelta: (String) -> Unit,
+            onToolEvent: (AgentMessage) -> Unit,
+            toolFilter: AgentToolRegistry.ToolFilter,
+            maxRounds: Int,
+        ): String = runToolLoop(
             config = config,
             agent = agent,
             systemPrompt = systemPrompt,
