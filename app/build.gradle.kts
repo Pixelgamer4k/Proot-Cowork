@@ -12,7 +12,7 @@ android {
         applicationId = "com.proot"
         minSdk = 26
         targetSdk = 35
-        versionName = "0.23.0-orchestration-kernel"
+        versionName = "0.23.1-hud-fix"
         versionCode = 78
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

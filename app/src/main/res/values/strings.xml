@@ -201,5 +201,6 @@
     <string name="kimi_computer_done">Task finished</string>
     <string name="kimi_think_label">Think</string>
     <string name="kimi_thinking">Planning next steps…</string>
+    <string name="kimi_typing">Thinking…</string>
     <string name="kimi_task_progress">Step %1$d / %2$d</string>
 </resources>

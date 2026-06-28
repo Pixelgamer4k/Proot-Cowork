@@ -51,7 +51,6 @@ import com.proot.cowork.domain.agent.AgentFeatureFlags
 import com.proot.cowork.domain.agent.AgentMessage
 import com.proot.cowork.domain.agent.ShellCommandLogEntry
 import com.proot.cowork.domain.agent.SwarmResponse
-import com.proot.cowork.domain.agent.ToolCallStatus
 import com.proot.cowork.domain.skills.PendingSkillWrite
 import com.proot.cowork.domain.skills.SkillSaveOffer
 import com.proot.cowork.ui.agent.swarm.ShellCommandLogCard
@@ -63,6 +62,7 @@ import com.proot.cowork.ui.kimi.KimiComputerHeader
 import com.proot.cowork.ui.kimi.KimiSystemNotice
 import com.proot.cowork.ui.kimi.KimiThinkRow
 import com.proot.cowork.ui.kimi.KimiTokens
+import com.proot.cowork.ui.kimi.KimiTypingIndicator
 import com.proot.cowork.ui.kimi.KimiUserCard
 import com.proot.cowork.ui.kimi.groupMessagesIntoTurns
 import com.proot.cowork.ui.kimi.thinkingLinesFromTools
@@ -367,10 +367,13 @@ private fun KimiTurnBlock(
             )
         }
 
+        val hasToolActivity = turn.tools.isNotEmpty() ||
+            toolCallCount > 0 ||
+            shellCommandLog.isNotEmpty()
         val hasAgentActivity = turn.tools.isNotEmpty() || turn.assistant != null || isActiveTurn
+
         if (hasAgentActivity) {
-            val showComputer = isActiveTurn && (isExecuting || turn.tools.isNotEmpty())
-            if (showComputer) {
+            if (isActiveTurn && hasToolActivity) {
                 KimiComputerHeader(
                     isActive = isExecuting,
                     toolCallCount = toolCallCount,
@@ -381,7 +384,8 @@ private fun KimiTurnBlock(
 
             val thinkLines = when {
                 turn.tools.isNotEmpty() -> thinkingLinesFromTools(turn.tools)
-                isExecuting -> listOf(stringResource(R.string.kimi_thinking))
+                shellCommandLog.isNotEmpty() && isExecuting ->
+                    shellCommandLog.takeLast(3).map { "${it.agentName}: ${it.command.take(80)}" }
                 else -> emptyList()
             }
             if (thinkLines.isNotEmpty()) {
@@ -402,22 +406,23 @@ private fun KimiTurnBlock(
 
             if (turn.assistant != null) {
                 val assistant = turn.assistant
-                val streaming = isExecuting &&
-                    assistant.content.isBlank() &&
-                    turn.tools.any { it.toolStatus == ToolCallStatus.RUNNING }
                 KimiAssistantBlock(
                     content = assistant.content,
-                    isStreaming = isExecuting && (assistant.content.isBlank() || streaming),
+                    isStreaming = isExecuting && assistant.content.isBlank() && !hasToolActivity,
                     onCopy = onMessageCopied,
                     onRegenerate = { onRegenerateFrom(assistant.id) },
                 )
             } else if (isExecuting && isActiveTurn) {
-                KimiAssistantBlock(
-                    content = "",
-                    isStreaming = true,
-                    onCopy = onMessageCopied,
-                    onRegenerate = null,
-                )
+                if (hasToolActivity) {
+                    KimiAssistantBlock(
+                        content = "",
+                        isStreaming = true,
+                        onCopy = onMessageCopied,
+                        onRegenerate = null,
+                    )
+                } else {
+                    KimiTypingIndicator()
+                }
             }
         }
     }
