@@ -6,6 +6,7 @@ import com.proot.cowork.data.proot.ProotGuestShellExecutor
 import com.proot.cowork.data.proot.ShellResult
 import com.proot.cowork.data.todos.TodoStore
 import com.proot.cowork.domain.agent.AgentRunContext
+import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.skills.SkillRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
