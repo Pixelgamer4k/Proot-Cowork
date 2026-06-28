@@ -68,7 +68,13 @@ object SystemPromptBuilder {
             appendLine("- Current date/time: $now")
             appendLine("- Task complexity: ${classification.complexity.name} (${classification.rationale})")
             if (classification.complexity.requiresPlan()) {
-                appendLine("- A plan was written to `$planPath` before execution. Follow its stages.")
+                appendLine("- A plan was written to `$planPath` before execution. Follow it efficiently.")
+                appendLine("- Use tools sparingly; avoid retry loops. Write deliverables to ${GuestPaths.AGENT_OUTPUT_DIR}.")
+            }
+            if (classification.complexity == TaskComplexity.MODERATE) {
+                appendLine("- Moderate task: research briefly (≤2 web_fetch), then write summary.md to output.")
+            }
+            if (classification.complexity == TaskComplexity.COMPLEX) {
                 appendLine("- Do not skip validation; fix failures before proceeding.")
             }
             if (classification.complexity.suggestsTodos()) {

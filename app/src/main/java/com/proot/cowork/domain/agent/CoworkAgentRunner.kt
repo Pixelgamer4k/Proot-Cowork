@@ -113,12 +113,17 @@ class CoworkAgentRunner(private val context: Context) {
                 onToolEvent = onToolEvent,
             )
         } else {
+            val taskMessage = if (classification.complexity.requiresPlan()) {
+                moderateTaskMessage(userTask)
+            } else {
+                userTask
+            }
             runToolLoop(
                 config = config,
                 agent = SwarmAgentType.Executor,
                 systemPrompt = system,
                 history = history,
-                userMessage = userTask,
+                userMessage = taskMessage,
                 isActive = isActive,
                 onAssistantDelta = onAssistantDelta,
                 onToolEvent = onToolEvent,
@@ -127,6 +132,16 @@ class CoworkAgentRunner(private val context: Context) {
                 temperatureOverride = if (toolPolicy == ToolPolicy.NONE) 0.1 else null,
             )
         }
+    }
+
+    private fun moderateTaskMessage(userTask: String): String = buildString {
+        appendLine(userTask)
+        appendLine()
+        appendLine("Execution constraints:")
+        appendLine("- Plan is at ${GuestPaths.planFilePath()}; follow it efficiently.")
+        appendLine("- Research with at most **2** web_fetch calls, then write **${GuestPaths.AGENT_OUTPUT_DIR}/summary.md**.")
+        appendLine("- Prefer write_file over repeated shell. Stop once summary.md exists.")
+        appendLine("- Stay within the tool-call budget; do not loop on validation.")
     }
 
     private suspend fun runStagedFast(
@@ -141,17 +156,19 @@ class CoworkAgentRunner(private val context: Context) {
     ): String {
         val validator = StageValidator()
         val stages = classification.suggestedStages
-        val stageBudget = (AgentExecutionSession.snapshot.value.maxToolCalls / stages.size.coerceAtLeast(1))
-            .coerceIn(3, AgentExecutionSession.snapshot.value.maxToolCalls)
         val completed = mutableListOf<Pair<ExecutionStage, String>>()
         var lastOutput = ""
 
-        for (stage in stages) {
+        for ((stageIndex, stage) in stages.withIndex()) {
             var attempt = 0
             var feedback = ""
             var passed = false
-            while (attempt < 3 && isActive()) {
+            while (attempt < 2 && isActive()) {
                 attempt++
+                if (AgentExecutionSession.isToolLimitReached()) break
+                val stagesLeft = (stages.size - stageIndex).coerceAtLeast(1)
+                val remaining = remainingToolCalls()
+                val stageBudget = (remaining / stagesLeft).coerceIn(2, 15)
                 val prompt = stagePrompt(
                     userTask = userTask,
                     stage = stage,
@@ -170,13 +187,21 @@ class CoworkAgentRunner(private val context: Context) {
                     onToolEvent = onToolEvent,
                     maxRounds = stageBudget,
                 )
-                val validation = validator.validate(
-                    config = config,
-                    stage = stage,
-                    stageOutput = lastOutput,
-                    userTask = userTask,
-                    isActive = isActive,
-                )
+                if (AgentExecutionSession.isToolLimitReached()) break
+                val validation = if (stage == ExecutionStage.INTEGRATE) {
+                    com.proot.cowork.domain.agent.orchestration.ValidationResult(
+                        passed = lastOutput.isNotBlank(),
+                        feedback = "Integration output required",
+                    )
+                } else {
+                    validator.validate(
+                        config = config,
+                        stage = stage,
+                        stageOutput = lastOutput,
+                        userTask = userTask,
+                        isActive = isActive,
+                    )
+                }
                 if (validation.passed) {
                     passed = true
                     completed.add(stage to lastOutput)
@@ -185,8 +210,15 @@ class CoworkAgentRunner(private val context: Context) {
                 feedback = validation.feedback
             }
             if (!passed) {
+                if (AgentExecutionSession.isToolLimitReached()) {
+                    return buildString {
+                        appendLine("Stopped: tool call limit (${AgentExecutionSession.snapshot.value.maxToolCalls}) reached during **${stage.label}**.")
+                        appendLine()
+                        append(lastOutput.take(2000).ifBlank { "Partial progress only — check ${GuestPaths.AGENT_OUTPUT_DIR} for files." })
+                    }
+                }
                 return buildString {
-                    appendLine("Stage **${stage.label}** failed after 3 attempts.")
+                    appendLine("Stage **${stage.label}** failed after 2 attempts.")
                     if (feedback.isNotBlank()) appendLine("Last feedback: $feedback")
                     appendLine()
                     append(lastOutput.take(2000))
@@ -194,6 +226,11 @@ class CoworkAgentRunner(private val context: Context) {
             }
         }
         return lastOutput
+    }
+
+    private fun remainingToolCalls(): Int {
+        val snap = AgentExecutionSession.snapshot.value
+        return (snap.maxToolCalls - snap.toolCallCount).coerceAtLeast(0)
     }
 
     private fun stageAgent(stage: ExecutionStage): SwarmAgentType = when (stage) {
@@ -358,7 +395,11 @@ class CoworkAgentRunner(private val context: Context) {
             ToolPolicy.FULL -> tools.toolsForAgent(agent).takeIf { it.length() > 0 }
         }
         var lastContent = ""
-        val roundLimit = maxRounds ?: AgentExecutionSession.snapshot.value.maxToolCalls.coerceAtLeast(1)
+        val budgetLeft = remainingToolCalls()
+        val roundLimit = when {
+            maxRounds != null -> minOf(maxRounds, budgetLeft).coerceAtLeast(1)
+            else -> budgetLeft.coerceAtLeast(1)
+        }
         val temperature = temperatureOverride ?: if (agent == SwarmAgentType.Planner) 0.3 else 0.4
 
         repeat(roundLimit) {

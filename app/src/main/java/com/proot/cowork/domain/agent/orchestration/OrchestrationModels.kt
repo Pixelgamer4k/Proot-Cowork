@@ -7,9 +7,9 @@ enum class TaskComplexity {
     COMPLEX,
     ;
 
-    fun requiresPlan(): Boolean = ordinal >= MODERATE.ordinal
+    fun requiresStagedExecution(): Boolean = this == COMPLEX
 
-    fun requiresStagedExecution(): Boolean = ordinal >= MODERATE.ordinal
+    fun requiresPlan(): Boolean = ordinal >= MODERATE.ordinal
 
     fun suggestsTodos(): Boolean = ordinal >= SIMPLE.ordinal
 

@@ -91,7 +91,7 @@ object OpenAiCompatibleLlmClient {
                         .optJSONArray("choices")
                         ?.optJSONObject(0)
                         ?.optJSONObject("delta")
-                        ?.optString("content")
+                        ?.safeOptString("content")
                         .orEmpty()
                 }.getOrDefault("")
                 if (delta.isNotEmpty()) {
@@ -146,7 +146,7 @@ object OpenAiCompatibleLlmClient {
                     finishReason = it
                 }
                 val delta = choice.optJSONObject("delta") ?: continue
-                val content = delta.optString("content")
+                val content = delta.safeOptString("content")
                 if (content.isNotEmpty()) {
                     contentBuffer.append(content)
                     onDelta(content)
@@ -156,10 +156,12 @@ object OpenAiCompatibleLlmClient {
                         val tc = arr.optJSONObject(i) ?: continue
                         val index = tc.optInt("index", i)
                         val builder = toolBuilders.getOrPut(index) { StreamingToolCallBuilder() }
-                        if (tc.has("id")) builder.id = tc.getString("id")
+                        if (tc.has("id") && !tc.isNull("id")) builder.id = tc.optString("id")
                         tc.optJSONObject("function")?.let { fn ->
-                            if (fn.has("name")) builder.name = fn.getString("name")
-                            if (fn.has("arguments")) builder.arguments.append(fn.getString("arguments"))
+                            if (fn.has("name") && !fn.isNull("name")) builder.name = fn.optString("name")
+                            if (fn.has("arguments") && !fn.isNull("arguments")) {
+                                builder.arguments.append(fn.optString("arguments"))
+                            }
                         }
                     }
                 }
@@ -274,7 +276,7 @@ object OpenAiCompatibleLlmClient {
         val choice = json.optJSONArray("choices")?.optJSONObject(0)
             ?: return LlmCompletionResult("", emptyList(), null)
         val message = choice.optJSONObject("message") ?: JSONObject()
-        val content = message.optString("content").orEmpty()
+        val content = message.safeOptString("content")
         val finish = choice.optString("finish_reason").ifBlank { null }
         val toolCalls = message.optJSONArray("tool_calls")?.let { arr ->
             (0 until arr.length()).mapNotNull { i ->
@@ -299,5 +301,11 @@ object OpenAiCompatibleLlmClient {
             .addHeader("X-Title", "Proot Cowork")
             .post(payload.toRequestBody(jsonMediaType))
             .build()
+    }
+
+    private fun JSONObject.safeOptString(key: String): String {
+        if (!has(key) || isNull(key)) return ""
+        val value = optString(key, "")
+        return if (value == "null") "" else value
     }
 }
