@@ -6,6 +6,9 @@ object GuestPaths {
     const val HOME = "/root"
     const val DESKTOP = "/root/Desktop"
     const val ARTIFACTS_DIR = "/root/Desktop/Artifacts"
+    const val AGENT_OUTPUT_DIR = "/root/cowork/output"
+
+    fun planFilePath(): String = "$AGENT_OUTPUT_DIR/plan.md"
 
     fun isAllowed(path: String): Boolean {
         val normalized = normalize(path)
@@ -25,5 +28,5 @@ object GuestPaths {
     }
 
     fun ensureArtifactsCmd(): String =
-        "mkdir -p '${ARTIFACTS_DIR}' '${DESKTOP}'"
+        "mkdir -p '${ARTIFACTS_DIR}' '${DESKTOP}' '${AGENT_OUTPUT_DIR}'"
 }

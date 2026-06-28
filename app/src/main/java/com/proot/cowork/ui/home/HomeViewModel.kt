@@ -1075,6 +1075,7 @@ class HomeViewModel(
                             text,
                             history + userMsg,
                             localState.value.maxToolCalls,
+                            localState.value.activeThreadId,
                         )
                     }
                 }

@@ -5,7 +5,15 @@ import com.proot.cowork.data.llm.LlmEndpoint
 import com.proot.cowork.data.prefs.LlmConfig
 import com.proot.cowork.data.llm.LlmToolCall
 import com.proot.cowork.data.llm.OpenAiCompatibleLlmClient
+import com.proot.cowork.data.files.GuestPaths
+import com.proot.cowork.data.proot.ProotGuestShellExecutor
 import com.proot.cowork.data.skills.SkillRepository
+import com.proot.cowork.domain.agent.orchestration.ExecutionStage
+import com.proot.cowork.domain.agent.orchestration.PlanWriter
+import com.proot.cowork.domain.agent.orchestration.StageValidator
+import com.proot.cowork.domain.agent.orchestration.SystemPromptBuilder
+import com.proot.cowork.domain.agent.orchestration.TaskClassifier
+import com.proot.cowork.domain.agent.orchestration.TaskClassification
 import com.proot.cowork.domain.agent.tools.AgentToolRegistry
 import com.proot.cowork.domain.agent.tools.CodeTool
 import com.proot.cowork.domain.agent.tools.FileSystemTool
@@ -66,34 +74,150 @@ class CoworkAgentRunner(private val context: Context) {
         config: LlmConfig,
         userTask: String,
         history: List<AgentMessage>,
+        threadId: String?,
+        isActive: () -> Boolean,
+        onAssistantDelta: (String) -> Unit,
+        onToolEvent: (AgentMessage) -> Unit,
+        onSystemNotice: (String) -> Unit = {},
+    ): String {
+        AgentRunContext.reset(threadId)
+        val classification = TaskClassifier.classify(userTask)
+        val shell = ProotGuestShellExecutor(context)
+        val planWriter = PlanWriter(shell)
+        planWriter.ensureOutputDir()
+
+        if (classification.complexity.requiresPlan()) {
+            planWriter.writePlan(classification)
+            onSystemNotice("Execution plan saved to ${GuestPaths.planFilePath()}")
+        }
+
+        val system = SystemPromptBuilder.build(
+            skillsSuffix = skillsPromptSuffix(),
+            classification = classification,
+            planPath = GuestPaths.planFilePath(),
+        )
+
+        return if (classification.complexity.requiresStagedExecution()) {
+            runStagedFast(
+                config = config,
+                classification = classification,
+                systemPrompt = system,
+                history = history,
+                userTask = userTask,
+                isActive = isActive,
+                onAssistantDelta = onAssistantDelta,
+                onToolEvent = onToolEvent,
+            )
+        } else {
+            runToolLoop(
+                config = config,
+                agent = SwarmAgentType.Executor,
+                systemPrompt = system,
+                history = history,
+                userMessage = userTask,
+                isActive = isActive,
+                onAssistantDelta = onAssistantDelta,
+                onToolEvent = onToolEvent,
+            )
+        }
+    }
+
+    private suspend fun runStagedFast(
+        config: LlmConfig,
+        classification: TaskClassification,
+        systemPrompt: String,
+        history: List<AgentMessage>,
+        userTask: String,
         isActive: () -> Boolean,
         onAssistantDelta: (String) -> Unit,
         onToolEvent: (AgentMessage) -> Unit,
     ): String {
-        val skillsSuffix = skillsPromptSuffix()
-        val system = """
-            You are Cowork Agent — a capable coding assistant with direct access to an Ubuntu proot environment.
-            Work like Kimi Agent: plan briefly, use tools proactively, then answer in clear markdown.
+        val validator = StageValidator()
+        val stages = classification.suggestedStages
+        val stageBudget = (AgentExecutionSession.snapshot.value.maxToolCalls / stages.size.coerceAtLeast(1))
+            .coerceIn(3, AgentExecutionSession.snapshot.value.maxToolCalls)
+        val completed = mutableListOf<Pair<ExecutionStage, String>>()
+        var lastOutput = ""
 
-            Behavior:
-            - Prefer tools (shell, files, code) over guessing; run commands to verify outcomes.
-            - Keep reasoning internal; user-facing text should be concise, structured markdown.
-            - Use **bold** for key results, bullet lists for steps, and `inline code` for paths/commands.
-            - When done, summarize what you did and where outputs live (paths under ~/Desktop when relevant).
-            - If a task is ambiguous, make a reasonable assumption and state it in one line.
+        for (stage in stages) {
+            var attempt = 0
+            var feedback = ""
+            var passed = false
+            while (attempt < 3 && isActive()) {
+                attempt++
+                val prompt = stagePrompt(
+                    userTask = userTask,
+                    stage = stage,
+                    completed = completed,
+                    attempt = attempt,
+                    feedback = feedback,
+                )
+                lastOutput = runToolLoop(
+                    config = config,
+                    agent = stageAgent(stage),
+                    systemPrompt = systemPrompt,
+                    history = history,
+                    userMessage = prompt,
+                    isActive = isActive,
+                    onAssistantDelta = onAssistantDelta,
+                    onToolEvent = onToolEvent,
+                    maxRounds = stageBudget,
+                )
+                val validation = validator.validate(
+                    config = config,
+                    stage = stage,
+                    stageOutput = lastOutput,
+                    userTask = userTask,
+                    isActive = isActive,
+                )
+                if (validation.passed) {
+                    passed = true
+                    completed.add(stage to lastOutput)
+                    break
+                }
+                feedback = validation.feedback
+            }
+            if (!passed) {
+                return buildString {
+                    appendLine("Stage **${stage.label}** failed after 3 attempts.")
+                    if (feedback.isNotBlank()) appendLine("Last feedback: $feedback")
+                    appendLine()
+                    append(lastOutput.take(2000))
+                }
+            }
+        }
+        return lastOutput
+    }
 
-            $skillsSuffix
-        """.trimIndent().trim()
-        return runToolLoop(
-            config = config,
-            agent = SwarmAgentType.Executor,
-            systemPrompt = system,
-            history = history,
-            userMessage = userTask,
-            isActive = isActive,
-            onAssistantDelta = onAssistantDelta,
-            onToolEvent = onToolEvent,
-        )
+    private fun stageAgent(stage: ExecutionStage): SwarmAgentType = when (stage) {
+        ExecutionStage.RESEARCH -> SwarmAgentType.Researcher
+        ExecutionStage.EXECUTE -> SwarmAgentType.Executor
+        ExecutionStage.VALIDATE -> SwarmAgentType.Validator
+        ExecutionStage.INTEGRATE -> SwarmAgentType.Executor
+    }
+
+    private fun stagePrompt(
+        userTask: String,
+        stage: ExecutionStage,
+        completed: List<Pair<ExecutionStage, String>>,
+        attempt: Int,
+        feedback: String,
+    ): String = buildString {
+        appendLine("Original user task: $userTask")
+        appendLine("Current stage: ${stage.label} (attempt $attempt/3)")
+        appendLine(stage.agentHint)
+        if (completed.isNotEmpty()) {
+            appendLine()
+            appendLine("Completed stages:")
+            completed.forEach { (s, out) ->
+                appendLine("- ${s.label}: ${out.take(400)}")
+            }
+        }
+        if (feedback.isNotBlank()) {
+            appendLine()
+            appendLine("Previous attempt failed validation: $feedback")
+            appendLine("Fix the issues and complete this stage.")
+        }
     }
 
     suspend fun executeSwarmPlan(
@@ -217,13 +341,14 @@ class CoworkAgentRunner(private val context: Context) {
         onAssistantDelta: (String) -> Unit,
         onToolEvent: (AgentMessage) -> Unit,
         subtaskId: String? = null,
+        maxRounds: Int? = null,
     ): String {
         val apiMessages = OpenAiCompatibleLlmClient.buildMessagesArray(systemPrompt, history, userMessage)
         val agentTools = tools.toolsForAgent(agent)
         var lastContent = ""
-        val maxRounds = AgentExecutionSession.snapshot.value.maxToolCalls.coerceAtLeast(1)
+        val roundLimit = maxRounds ?: AgentExecutionSession.snapshot.value.maxToolCalls.coerceAtLeast(1)
 
-        repeat(maxRounds) {
+        repeat(roundLimit) {
             ensureActive(isActive, subtaskId)
             if (AgentExecutionSession.isToolLimitReached()) throw ToolLimitReachedException()
 
@@ -335,6 +460,7 @@ class CoworkAgentRunner(private val context: Context) {
             }
             FileSystemTool.NAME_READ -> "cat ${args.optString("path")}"
             FileSystemTool.NAME_WRITE -> "write ${args.optString("path")}"
+            FileSystemTool.NAME_EDIT -> "edit ${args.optString("path")}"
             else -> null
         }
     }

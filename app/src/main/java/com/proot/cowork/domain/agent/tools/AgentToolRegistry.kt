@@ -4,7 +4,8 @@ import android.content.Context
 import android.util.Base64
 import com.proot.cowork.data.proot.ProotGuestShellExecutor
 import com.proot.cowork.data.proot.ShellResult
-import com.proot.cowork.data.prefs.SettingsRepository
+import com.proot.cowork.data.todos.TodoStore
+import com.proot.cowork.domain.agent.AgentRunContext
 import com.proot.cowork.data.skills.SkillRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,6 +24,7 @@ class AgentToolRegistry(context: Context) {
     private val shell = ProotGuestShellExecutor(context)
     private val skills = SkillRepository(context)
     private val settings = SettingsRepository(appContext)
+    private val todos = TodoStore(appContext)
     private val http = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS)
@@ -32,6 +34,9 @@ class AgentToolRegistry(context: Context) {
         ProotShellTool.NAME -> ProotShellTool.execute(shell, invocation.arguments)
         FileSystemTool.NAME_READ -> FileSystemTool.read(shell, invocation.arguments)
         FileSystemTool.NAME_WRITE -> FileSystemTool.write(shell, invocation.arguments)
+        FileSystemTool.NAME_EDIT -> FileSystemTool.edit(shell, invocation.arguments)
+        TodoTools.NAME_WRITE -> TodoTools.write(todos, invocation.arguments)
+        TodoTools.NAME_READ -> TodoTools.read(todos)
         WebTool.NAME -> WebTool.execute(shell, http, invocation.arguments)
         CodeTool.NAME -> CodeTool.execute(shell, invocation.arguments)
         SkillTools.NAME_LIST -> SkillTools.list(skills, invocation.arguments)
@@ -48,6 +53,9 @@ class AgentToolRegistry(context: Context) {
         put(ProotShellTool.definition())
         put(FileSystemTool.readDefinition())
         put(FileSystemTool.writeDefinition())
+        put(FileSystemTool.editDefinition())
+        put(TodoTools.writeDefinition())
+        put(TodoTools.readDefinition())
         put(WebTool.definition())
         put(CodeTool.definition())
         put(SkillTools.listDefinition())
@@ -64,9 +72,17 @@ class AgentToolRegistry(context: Context) {
             com.proot.cowork.domain.agent.SwarmAgentType.Researcher ->
                 setOf(WebTool.NAME, FileSystemTool.NAME_READ, ProotShellTool.NAME, SkillTools.NAME_LIST, SkillTools.NAME_VIEW)
             com.proot.cowork.domain.agent.SwarmAgentType.Executor ->
-                setOf(ProotShellTool.NAME, FileSystemTool.NAME_READ, FileSystemTool.NAME_WRITE, SkillTools.NAME_LIST, SkillTools.NAME_VIEW, SkillTools.NAME_MANAGE)
+                setOf(
+                    ProotShellTool.NAME, FileSystemTool.NAME_READ, FileSystemTool.NAME_WRITE,
+                    FileSystemTool.NAME_EDIT, TodoTools.NAME_WRITE, TodoTools.NAME_READ,
+                    SkillTools.NAME_LIST, SkillTools.NAME_VIEW, SkillTools.NAME_MANAGE,
+                )
             com.proot.cowork.domain.agent.SwarmAgentType.Coder ->
-                setOf(ProotShellTool.NAME, FileSystemTool.NAME_READ, FileSystemTool.NAME_WRITE, CodeTool.NAME, SkillTools.NAME_LIST, SkillTools.NAME_VIEW, SkillTools.NAME_MANAGE)
+                setOf(
+                    ProotShellTool.NAME, FileSystemTool.NAME_READ, FileSystemTool.NAME_WRITE,
+                    FileSystemTool.NAME_EDIT, TodoTools.NAME_WRITE, TodoTools.NAME_READ,
+                    CodeTool.NAME, SkillTools.NAME_LIST, SkillTools.NAME_VIEW, SkillTools.NAME_MANAGE,
+                )
             com.proot.cowork.domain.agent.SwarmAgentType.Validator ->
                 setOf(ProotShellTool.NAME, FileSystemTool.NAME_READ, SkillTools.NAME_LIST, SkillTools.NAME_VIEW)
             com.proot.cowork.domain.agent.SwarmAgentType.Slack ->
@@ -110,6 +126,7 @@ object ProotShellTool {
 object FileSystemTool {
     const val NAME_READ = "read_file"
     const val NAME_WRITE = "write_file"
+    const val NAME_EDIT = "edit_file"
 
     fun readDefinition(): JSONObject = toolDef(
         NAME_READ,
@@ -133,6 +150,7 @@ object FileSystemTool {
     suspend fun read(shell: ProotGuestShellExecutor, args: JSONObject): String {
         val path = args.optString("path").trim()
         if (path.isBlank()) return "Error: path is required"
+        AgentRunContext.filesReadThisRun.add(path)
         val quoted = "'" + path.replace("'", "'\\''") + "'"
         return formatResult(shell.run("cat $quoted 2>&1 | head -c 32000"))
     }
@@ -145,6 +163,37 @@ object FileSystemTool {
         val quoted = "'" + path.replace("'", "'\\''") + "'"
         val cmd = "mkdir -p \$(dirname $quoted) && echo '$b64' | base64 -d > $quoted"
         return formatResult(shell.run(cmd))
+    }
+
+    fun editDefinition(): JSONObject = toolDef(
+        NAME_EDIT,
+        "Replace exact old_string with new_string in a file. Must read_file the same path first in this run.",
+        JSONObject().apply {
+            put("path", JSONObject().put("type", "string"))
+            put("old_string", JSONObject().put("type", "string"))
+            put("new_string", JSONObject().put("type", "string"))
+        },
+        listOf("path", "old_string", "new_string"),
+    )
+
+    suspend fun edit(shell: ProotGuestShellExecutor, args: JSONObject): String {
+        val path = args.optString("path").trim()
+        val oldString = args.optString("old_string")
+        val newString = args.optString("new_string")
+        if (path.isBlank()) return "Error: path is required"
+        if (oldString.isEmpty()) return "Error: old_string is required"
+        if (!AgentRunContext.filesReadThisRun.contains(path)) {
+            return "Error: read_file `$path` before edit_file"
+        }
+        val readResult = read(shell, JSONObject().put("path", path))
+        if (readResult.startsWith("Error")) return readResult
+        val contentStart = readResult.indexOf('\n').let { if (it < 0) 0 else it + 1 }
+        val fileBody = if (contentStart > 0) readResult.substring(contentStart) else readResult
+        if (!fileBody.contains(oldString)) {
+            return "Error: old_string not found in file"
+        }
+        val updated = fileBody.replaceFirst(oldString, newString)
+        return write(shell, JSONObject().put("path", path).put("content", updated))
     }
 
     private fun toolDef(name: String, desc: String, props: JSONObject, required: List<String>): JSONObject =

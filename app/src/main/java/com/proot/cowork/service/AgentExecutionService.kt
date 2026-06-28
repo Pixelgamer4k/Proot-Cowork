@@ -15,6 +15,7 @@ import com.proot.cowork.R
 import com.proot.cowork.data.llm.LlmEndpoint
 import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.domain.agent.AgentExecutionSession
+import com.proot.cowork.domain.agent.AgentRunContext
 import com.proot.cowork.domain.agent.AgentMessage
 import com.proot.cowork.domain.agent.CoworkAgentRunner
 import com.proot.cowork.domain.agent.AgentRunController
@@ -76,8 +77,9 @@ class AgentExecutionService : Service() {
                 val task = intent.getStringExtra(EXTRA_USER_TASK) ?: return START_NOT_STICKY
                 val historyJson = intent.getStringExtra(EXTRA_HISTORY_JSON).orEmpty()
                 val maxTools = intent.getIntExtra(EXTRA_MAX_TOOL_CALLS, DEFAULT_MAX_TOOL_CALLS)
-                beginForeground("Fast agent running…")
-                executeFast(task, parseHistory(historyJson), maxTools)
+                val threadId = intent.getStringExtra(EXTRA_THREAD_ID)
+                beginForeground("Cowork agent running…")
+                executeFast(task, parseHistory(historyJson), maxTools, threadId)
             }
         }
         return START_STICKY
@@ -159,10 +161,11 @@ class AgentExecutionService : Service() {
         }
     }
 
-    private fun executeFast(task: String, history: List<AgentMessage>, maxToolCalls: Int) {
+    private fun executeFast(task: String, history: List<AgentMessage>, maxToolCalls: Int, threadId: String?) {
         runJob?.cancel()
         runJob = scope.launch {
             AgentExecutionSession.resetForNewRun(ExecutionMode.FAST, maxToolCalls = maxToolCalls)
+            AgentRunContext.reset(threadId)
             val config = settingsRepository.getLlmConfigSnapshot()
             val assistantId = AgentExecutionSession.newMessageId()
             AgentExecutionSession.appendMessage(
@@ -176,6 +179,7 @@ class AgentExecutionService : Service() {
                     config = config,
                     userTask = task,
                     history = history,
+                    threadId = threadId,
                     isActive = ::isRunActive,
                     onAssistantDelta = { delta ->
                         AgentExecutionSession.updateMessage(assistantId) { it.copy(content = it.content + delta) }
@@ -184,7 +188,16 @@ class AgentExecutionService : Service() {
                         val existing = AgentExecutionSession.snapshot.value.messages.any { it.id == msg.id }
                         if (existing) AgentExecutionSession.updateMessage(msg.id) { msg }
                         else AgentExecutionSession.appendMessage(msg)
-                        updateNotification("Fast → ${msg.toolName}")
+                        updateNotification("Agent → ${msg.toolName}")
+                    },
+                    onSystemNotice = { notice ->
+                        AgentExecutionSession.appendMessage(
+                            AgentMessage(
+                                AgentExecutionSession.newMessageId(),
+                                MessageRole.SYSTEM,
+                                notice,
+                            ),
+                        )
                     },
                 )
             } catch (e: ToolLimitReachedException) {
@@ -216,6 +229,7 @@ class AgentExecutionService : Service() {
                     ),
                 )
             } finally {
+                AgentRunContext.reset(null)
                 AgentExecutionSession.setRunning(false)
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -275,6 +289,7 @@ class AgentExecutionService : Service() {
         const val EXTRA_MAX_POOL = "max_pool"
         const val EXTRA_MAX_TOOL_CALLS = "max_tool_calls"
         const val EXTRA_SUBTASK_ID = "subtask_id"
+        const val EXTRA_THREAD_ID = "thread_id"
         private const val NOTIFICATION_ID = 77
 
         fun startSwarm(context: Context, plan: TaskPlan, history: List<AgentMessage>, maxPool: Int, maxToolCalls: Int) {
@@ -289,13 +304,20 @@ class AgentExecutionService : Service() {
             )
         }
 
-        fun startFast(context: Context, task: String, history: List<AgentMessage>, maxToolCalls: Int) {
+        fun startFast(
+            context: Context,
+            task: String,
+            history: List<AgentMessage>,
+            maxToolCalls: Int,
+            threadId: String?,
+        ) {
             context.startForegroundService(
                 Intent(context, AgentExecutionService::class.java).apply {
                     action = ACTION_EXECUTE_FAST
                     putExtra(EXTRA_USER_TASK, task)
                     putExtra(EXTRA_HISTORY_JSON, historyToJson(history).toString())
                     putExtra(EXTRA_MAX_TOOL_CALLS, maxToolCalls)
+                    putExtra(EXTRA_THREAD_ID, threadId)
                 },
             )
         }
