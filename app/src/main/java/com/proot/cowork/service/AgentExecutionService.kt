@@ -203,6 +203,17 @@ class AgentExecutionService : Service() {
             } catch (e: ToolLimitReachedException) {
                 val limit = AgentExecutionSession.snapshot.value.maxToolCalls
                 AgentExecutionSession.onStopRequested("Tool call limit ($limit) reached")
+                AgentExecutionSession.updateMessage(assistantId) { msg ->
+                    val bad = msg.content.isBlank() || msg.content.replace("null", "").isBlank()
+                    if (bad) {
+                        msg.copy(
+                            content = "Stopped after reaching the tool call limit ($limit). " +
+                                "Check ${com.proot.cowork.data.files.GuestPaths.AGENT_OUTPUT_DIR} for partial files.",
+                        )
+                    } else {
+                        msg.copy(content = msg.content + "\n\n*(Stopped: tool call limit $limit reached.)*")
+                    }
+                }
                 AgentExecutionSession.appendMessage(
                     AgentMessage(
                         AgentExecutionSession.newMessageId(),
