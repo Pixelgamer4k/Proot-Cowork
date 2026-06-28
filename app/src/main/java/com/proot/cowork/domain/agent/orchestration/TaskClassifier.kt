@@ -3,9 +3,10 @@ package com.proot.cowork.domain.agent.orchestration
 object TaskClassifier {
 
     private val trivialPatterns = listOf(
-        Regex("""^(what is|what's|how much is|define)\b""", RegexOption.IGNORE_CASE),
+        Regex("""^(what is|what's|how much is|how many is|define)\b""", RegexOption.IGNORE_CASE),
         Regex("""^\d+\s*[\+\-\*/]\s*\d+"""),
         Regex("""^(hi|hello|hey)\b""", RegexOption.IGNORE_CASE),
+        Regex("""^(what is|how much is)\s+[\d\s\+\-\*/\(\)\.]+[?\s]*$""", RegexOption.IGNORE_CASE),
     )
 
     private val complexKeywords = listOf(

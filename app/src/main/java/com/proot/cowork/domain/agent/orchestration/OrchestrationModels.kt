@@ -12,6 +12,9 @@ enum class TaskComplexity {
     fun requiresStagedExecution(): Boolean = ordinal >= MODERATE.ordinal
 
     fun suggestsTodos(): Boolean = ordinal >= SIMPLE.ordinal
+
+    /** Trivial Q&A — no tools, single direct reply. */
+    fun isToolFree(): Boolean = this == TRIVIAL
 }
 
 data class TaskClassification(

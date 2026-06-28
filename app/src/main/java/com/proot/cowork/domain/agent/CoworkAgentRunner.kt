@@ -14,6 +14,8 @@ import com.proot.cowork.domain.agent.orchestration.StageValidator
 import com.proot.cowork.domain.agent.orchestration.SystemPromptBuilder
 import com.proot.cowork.domain.agent.orchestration.TaskClassifier
 import com.proot.cowork.domain.agent.orchestration.TaskClassification
+import com.proot.cowork.domain.agent.orchestration.TaskComplexity
+import com.proot.cowork.domain.agent.orchestration.ToolPolicy
 import com.proot.cowork.domain.agent.tools.AgentToolRegistry
 import com.proot.cowork.domain.agent.tools.CodeTool
 import com.proot.cowork.domain.agent.tools.FileSystemTool
@@ -92,10 +94,12 @@ class CoworkAgentRunner(private val context: Context) {
         }
 
         val system = SystemPromptBuilder.build(
-            skillsSuffix = skillsPromptSuffix(),
+            skillsSuffix = if (classification.complexity.isToolFree()) "" else skillsPromptSuffix(),
             classification = classification,
             planPath = GuestPaths.planFilePath(),
         )
+
+        val toolPolicy = if (classification.complexity.isToolFree()) ToolPolicy.NONE else ToolPolicy.FULL
 
         return if (classification.complexity.requiresStagedExecution()) {
             runStagedFast(
@@ -118,6 +122,9 @@ class CoworkAgentRunner(private val context: Context) {
                 isActive = isActive,
                 onAssistantDelta = onAssistantDelta,
                 onToolEvent = onToolEvent,
+                toolPolicy = toolPolicy,
+                maxRounds = if (toolPolicy == ToolPolicy.NONE) 1 else null,
+                temperatureOverride = if (toolPolicy == ToolPolicy.NONE) 0.1 else null,
             )
         }
     }
@@ -342,11 +349,17 @@ class CoworkAgentRunner(private val context: Context) {
         onToolEvent: (AgentMessage) -> Unit,
         subtaskId: String? = null,
         maxRounds: Int? = null,
+        toolPolicy: ToolPolicy = ToolPolicy.FULL,
+        temperatureOverride: Double? = null,
     ): String {
         val apiMessages = OpenAiCompatibleLlmClient.buildMessagesArray(systemPrompt, history, userMessage)
-        val agentTools = tools.toolsForAgent(agent)
+        val agentTools = when (toolPolicy) {
+            ToolPolicy.NONE -> null
+            ToolPolicy.FULL -> tools.toolsForAgent(agent).takeIf { it.length() > 0 }
+        }
         var lastContent = ""
         val roundLimit = maxRounds ?: AgentExecutionSession.snapshot.value.maxToolCalls.coerceAtLeast(1)
+        val temperature = temperatureOverride ?: if (agent == SwarmAgentType.Planner) 0.3 else 0.4
 
         repeat(roundLimit) {
             ensureActive(isActive, subtaskId)
@@ -355,8 +368,8 @@ class CoworkAgentRunner(private val context: Context) {
             val result = OpenAiCompatibleLlmClient.completeStreaming(
                 config = config,
                 messages = apiMessages,
-                tools = if (agentTools.length() > 0) agentTools else null,
-                temperature = if (agent == SwarmAgentType.Planner) 0.3 else 0.4,
+                tools = agentTools,
+                temperature = temperature,
                 isActive = isActive,
                 onDelta = onAssistantDelta,
             )
@@ -366,6 +379,10 @@ class CoworkAgentRunner(private val context: Context) {
                     apiMessages.put(JSONObject().put("role", "assistant").put("content", result.content))
                 }
                 return result.content.ifBlank { lastContent }
+            }
+
+            if (toolPolicy == ToolPolicy.NONE) {
+                return result.content.ifBlank { "Unable to answer without tools disabled." }
             }
 
             apiMessages.put(OpenAiCompatibleLlmClient.assistantToolCallMessage(result.toolCalls))

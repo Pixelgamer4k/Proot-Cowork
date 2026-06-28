@@ -10,21 +10,40 @@ object SystemPromptBuilder {
         skillsSuffix: String,
         classification: TaskClassification,
         planPath: String,
-    ): String = buildString {
-        appendLine(layerIdentity())
-        appendLine()
-        if (skillsSuffix.isNotBlank()) {
-            appendLine(skillsSuffix)
-            appendLine()
+    ): String {
+        if (classification.complexity.isToolFree()) {
+            return buildTrivialPrompt(classification)
         }
-        appendLine(layerToolGuidance())
-        appendLine()
-        appendLine(layerEmphasisRules(classification, planPath))
-        appendLine()
-        appendLine(layerOrchestration(classification))
-        appendLine()
-        appendLine(layerSkillRules())
-    }.trim()
+        return buildString {
+            appendLine(layerIdentity())
+            appendLine()
+            if (skillsSuffix.isNotBlank()) {
+                appendLine(skillsSuffix)
+                appendLine()
+            }
+            appendLine(layerToolGuidance())
+            appendLine()
+            appendLine(layerEmphasisRules(classification, planPath))
+            appendLine()
+            appendLine(layerOrchestration(classification))
+            appendLine()
+            appendLine(layerSkillRules())
+        }.trim()
+    }
+
+    private fun buildTrivialPrompt(classification: TaskClassification): String {
+        val now = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm z"))
+        return """
+            |You are Cowork Agent. The user's question is trivial (${classification.rationale}).
+            |
+            |Rules — follow strictly:
+            |- Answer directly in one short message. No markdown headers unless helpful.
+            |- Do NOT use tools. Do NOT run shell commands. Do NOT read or write files.
+            |- Do NOT create todos or plans. Do NOT mention proot, tools, or your environment.
+            |- For arithmetic, compute mentally and give the numeric result.
+            |- Current date/time (if relevant): $now
+        """.trimMargin().trim()
+    }
 
     private fun layerIdentity(): String = """
         |# Layer 1 — Core identity
@@ -55,7 +74,7 @@ object SystemPromptBuilder {
             if (classification.complexity.suggestsTodos()) {
                 appendLine("- Use todo_write before todo_read. Keep exactly one todo in_progress.")
             }
-            appendLine("- Prefer tools over guessing. Verify with shell when unsure.")
+            appendLine("- Use tools when the task requires actions in the environment; skip tools for pure Q&A.")
             appendLine("- Final answers: **bold** key results, bullet steps, `code` for paths/commands.")
             appendLine("- Summarize what you did and where outputs live.")
         }
