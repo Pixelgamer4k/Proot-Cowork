@@ -20,4 +20,14 @@ enum class CoworkTab(
     Skills(R.string.tab_skills, Icons.Default.Build),
     Files(R.string.tab_files, Icons.Default.Folder),
     Terminal(R.string.tab_terminal, Icons.Default.Terminal),
+    ;
+
+    companion object {
+        val visibleTabs: List<CoworkTab>
+            get() = if (com.proot.cowork.domain.agent.AgentFeatureFlags.SWARM_UI_ENABLED) {
+                entries
+            } else {
+                entries.filter { it != Agents }
+            }
+    }
 }

@@ -26,12 +26,10 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Notes
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -57,7 +55,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.proot.cowork.R
 import com.proot.cowork.domain.agent.ExecutionMode
-import com.proot.cowork.ui.design.CoworkTokens
+import com.proot.cowork.ui.kimi.KimiTokens
 import com.proot.cowork.ui.theme.Motion
 
 @Composable
@@ -81,38 +79,23 @@ fun ChatComposer(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    var modeMenuOpen by remember { mutableStateOf(false) }
     var attachMenuOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(isFocused) { onFocusChange(isFocused) }
 
     val showSend = value.isNotBlank() && !isExecuting && !awaitingApproval
     val canSend = showSend && isApiConfigured
-    val borderColor = if (isFocused) CoworkTokens.Mint.copy(alpha = 0.5f) else CoworkTokens.Border
-
-    val modeLabel = when (executionMode) {
-        ExecutionMode.SWARM -> stringResource(R.string.mode_swarm_short)
-        ExecutionMode.FAST -> stringResource(R.string.mode_fast)
-    }
-    val modeIcon = when (executionMode) {
-        ExecutionMode.SWARM -> Icons.Default.Bolt
-        ExecutionMode.FAST -> Icons.Default.FlashOn
-    }
-    val modeBorderColor = if (executionMode == ExecutionMode.SWARM) {
-        CoworkTokens.Mint.copy(alpha = 0.45f)
-    } else {
-        CoworkTokens.Border
-    }
+    val borderColor = if (isFocused) KimiTokens.Accent.copy(alpha = 0.45f) else KimiTokens.Border
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .heightIn(min = 118.dp)
-            .clip(CoworkTokens.ShapeComposer)
-            .background(CoworkTokens.Surface)
-            .border(1.dp, borderColor, CoworkTokens.ShapeComposer)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .heightIn(min = 108.dp)
+            .clip(KimiTokens.ShapeComposer)
+            .background(KimiTokens.Card)
+            .border(1.dp, borderColor, KimiTokens.ShapeComposer)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
         TextField(
             value = value,
@@ -123,10 +106,10 @@ fun ChatComposer(
                     text = when {
                         awaitingApproval -> stringResource(R.string.swarm_awaiting_execute)
                         !isApiConfigured -> stringResource(R.string.agent_api_required)
-                        isExecuting -> stringResource(R.string.agent_working)
-                        else -> stringResource(R.string.agent_hint_focused)
+                        isExecuting -> stringResource(R.string.kimi_composer_working)
+                        else -> stringResource(R.string.kimi_composer_hint)
                     },
-                    color = CoworkTokens.TextMuted,
+                    color = KimiTokens.TextMuted,
                 )
             },
             textStyle = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
@@ -136,12 +119,12 @@ fun ChatComposer(
                 disabledContainerColor = Color.Transparent,
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent,
-                cursorColor = CoworkTokens.Mint,
-                focusedTextColor = CoworkTokens.TextPrimary,
-                unfocusedTextColor = CoworkTokens.TextPrimary,
+                cursorColor = KimiTokens.Accent,
+                focusedTextColor = KimiTokens.TextPrimary,
+                unfocusedTextColor = KimiTokens.TextPrimary,
             ),
             interactionSource = interactionSource,
-            maxLines = 4,
+            maxLines = 5,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
             keyboardActions = KeyboardActions(onSend = { if (canSend) onSend() }),
             enabled = !isExecuting,
@@ -158,9 +141,9 @@ fun ChatComposer(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
-                        .background(CoworkTokens.SurfaceElevated),
+                        .background(KimiTokens.CardElevated),
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.composer_attach_menu), tint = CoworkTokens.TextSecondary)
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.composer_attach_menu), tint = KimiTokens.TextSecondary)
                 }
                 DropdownMenu(expanded = attachMenuOpen, onDismissRequest = { attachMenuOpen = false }) {
                     DropdownMenuItem(
@@ -174,15 +157,10 @@ fun ChatComposer(
                         onClick = { attachMenuOpen = false; onAddContextBlock() },
                     )
                     if (artifactFileNames.isNotEmpty()) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.composer_attach_artifact)) },
-                            leadingIcon = { Icon(Icons.Default.FolderOpen, null) },
-                            enabled = false,
-                            onClick = { },
-                        )
                         artifactFileNames.takeLast(8).forEach { name ->
                             DropdownMenuItem(
                                 text = { Text(name, maxLines = 1) },
+                                leadingIcon = { Icon(Icons.Default.FolderOpen, null) },
                                 onClick = {
                                     attachMenuOpen = false
                                     onAttachArtifact(name)
@@ -193,40 +171,14 @@ fun ChatComposer(
                 }
             }
 
-            Spacer(modifier = Modifier.size(8.dp))
-
-            Box {
-                Surface(
-                    onClick = { modeMenuOpen = true },
-                    shape = CoworkTokens.ShapePill,
-                    color = CoworkTokens.SurfaceElevated,
-                    modifier = Modifier.border(1.dp, modeBorderColor, CoworkTokens.ShapePill),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(modeIcon, null, tint = CoworkTokens.Mint, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.size(6.dp))
-                        Text(
-                            text = modeLabel,
-                            color = CoworkTokens.TextPrimary,
-                            fontWeight = FontWeight.Medium,
-                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-                        )
-                        Icon(Icons.Default.UnfoldMore, null, tint = CoworkTokens.TextMuted, modifier = Modifier.size(16.dp))
-                    }
-                }
-                DropdownMenu(expanded = modeMenuOpen, onDismissRequest = { modeMenuOpen = false }) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.mode_swarm_short)) },
-                        onClick = { onModeChange(ExecutionMode.SWARM); modeMenuOpen = false },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.mode_fast)) },
-                        onClick = { onModeChange(ExecutionMode.FAST); modeMenuOpen = false },
-                    )
-                }
+            if (isExecuting) {
+                Spacer(Modifier.size(8.dp))
+                Icon(
+                    Icons.Default.GraphicEq,
+                    contentDescription = null,
+                    tint = KimiTokens.Accent.copy(alpha = 0.7f),
+                    modifier = Modifier.size(20.dp),
+                )
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -240,38 +192,51 @@ fun ChatComposer(
                 label = "composerAction",
             ) { sending ->
                 if (sending) {
-                    IconButton(onClick = onStop) {
-                        Icon(Icons.Default.Stop, stringResource(R.string.stop_agent), tint = CoworkTokens.Failed)
-                    }
-                } else if (showSend) {
                     Surface(
-                        onClick = { if (canSend) onSend() },
-                        shape = CoworkTokens.ShapePill,
-                        color = CoworkTokens.SpeakBg,
-                        modifier = Modifier.alpha(if (canSend) 1f else 0.5f),
+                        onClick = onStop,
+                        shape = KimiTokens.ShapePill,
+                        color = KimiTokens.Error.copy(alpha = 0.15f),
+                        modifier = Modifier.border(1.dp, KimiTokens.Error.copy(alpha = 0.35f), KimiTokens.ShapePill),
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.Send, null, tint = CoworkTokens.SpeakFg, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Stop, stringResource(R.string.stop_agent), tint = KimiTokens.Error, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.size(6.dp))
-                            Text(stringResource(R.string.send), color = CoworkTokens.SpeakFg, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.stop_agent), color = KimiTokens.Error, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                } else if (showSend) {
+                    Surface(
+                        onClick = { if (canSend) onSend() },
+                        shape = KimiTokens.ShapePill,
+                        color = KimiTokens.Accent,
+                        modifier = Modifier.alpha(if (canSend) 1f else 0.45f),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Send, null, tint = KimiTokens.Bg, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.size(6.dp))
+                            Text(stringResource(R.string.send), color = KimiTokens.Bg, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 } else {
                     Surface(
                         onClick = onSpeak,
-                        shape = CoworkTokens.ShapePill,
-                        color = CoworkTokens.SpeakBg,
+                        shape = KimiTokens.ShapePill,
+                        color = KimiTokens.CardElevated,
+                        modifier = Modifier.border(1.dp, KimiTokens.Border, KimiTokens.ShapePill),
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(Icons.Default.Mic, null, tint = CoworkTokens.SpeakFg, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Mic, null, tint = KimiTokens.TextPrimary, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.size(6.dp))
-                            Text(stringResource(R.string.speak), color = CoworkTokens.SpeakFg, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.speak), color = KimiTokens.TextPrimary, fontWeight = FontWeight.Medium)
                         }
                     }
                 }

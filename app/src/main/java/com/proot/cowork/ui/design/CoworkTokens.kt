@@ -6,7 +6,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 object CoworkTokens {
-    val Bg = Color(0xFF0A0A0B)
+    val Bg = Color(0xFF000000)
     val Surface = Color(0xFF141416)
     val SurfaceElevated = Color(0xFF1C1C1F)
     val Border = Color(0xFF2A2A2E)

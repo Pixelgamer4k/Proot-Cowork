@@ -20,7 +20,7 @@ import com.proot.cowork.data.prefs.SettingsRepository
 import com.proot.cowork.data.prootcontainer.ProotContainerRepository
 import com.proot.cowork.data.rootfs.ImportResult
 import com.proot.cowork.data.rootfs.RootfsRepository
-import com.proot.cowork.domain.agent.AgentExecutionSession
+import com.proot.cowork.domain.agent.AgentFeatureFlags
 import com.proot.cowork.domain.agent.AgentExecutionSnapshot
 import com.proot.cowork.domain.agent.AgentMessage
 import com.proot.cowork.domain.agent.CoworkAgentRunner
@@ -76,7 +76,7 @@ data class HomeUiState(
     val messages: List<AgentMessage> = emptyList(),
     val swarmTasks: List<SwarmTask> = emptyList(),
     val agentStates: List<SwarmAgentState> = SwarmAgentType.entries.map { SwarmAgentState(it) },
-    val executionMode: ExecutionMode = ExecutionMode.SWARM,
+    val executionMode: ExecutionMode = ExecutionMode.FAST,
     val inputText: String = "",
     val isExecuting: Boolean = false,
     val awaitingApproval: Boolean = false,
@@ -216,18 +216,22 @@ class HomeViewModel(
                         toolLimitReached = snap.toolLimitReached,
                         shellCommandLog = snap.shellCommandLog,
                         cancellationMessage = snap.cancellationMessage,
-                        swarmResponse = refreshSwarmResponse(
-                            existing = local.swarmResponse,
-                            messages = mergedMessages,
-                            tasks = tasks,
-                            isExecuting = executing,
-                            awaitingApproval = local.awaitingApproval,
-                            toolCallCount = snap.toolCallCount,
-                            maxToolCalls = snap.maxToolCalls,
-                            toolLimitReached = snap.toolLimitReached,
-                            shellCommandLog = snap.shellCommandLog,
-                            cancellationMessage = snap.cancellationMessage,
-                        ),
+                        swarmResponse = if (AgentFeatureFlags.SWARM_UI_ENABLED) {
+                            refreshSwarmResponse(
+                                existing = local.swarmResponse,
+                                messages = mergedMessages,
+                                tasks = tasks,
+                                isExecuting = executing,
+                                awaitingApproval = local.awaitingApproval,
+                                toolCallCount = snap.toolCallCount,
+                                maxToolCalls = snap.maxToolCalls,
+                                toolLimitReached = snap.toolLimitReached,
+                                shellCommandLog = snap.shellCommandLog,
+                                cancellationMessage = snap.cancellationMessage,
+                            )
+                        } else {
+                            null
+                        },
                     )
                 }
             }
@@ -1002,8 +1006,12 @@ class HomeViewModel(
                 role = MessageRole.USER,
                 content = text,
             )
-            val assistantId = UUID.randomUUID().toString()
             val history = localState.value.messages
+            val mode = if (AgentFeatureFlags.SWARM_UI_ENABLED) {
+                localState.value.executionMode
+            } else {
+                ExecutionMode.FAST
+            }
 
             localState.update {
                 it.copy(
@@ -1013,26 +1021,29 @@ class HomeViewModel(
                     awaitingApproval = false,
                     pendingPlan = null,
                     skillSaveOffer = null,
-                    swarmResponse = SwarmResponse(
-                        messageId = assistantId,
-                        phase = SwarmPhase.PLANNING,
-                        summary = "",
-                        plan = emptyList(),
-                        thinkingLogs = listOf("Planning swarm…"),
-                    ),
-                    messages = it.messages + userMsg + AgentMessage(
-                        assistantId,
-                        MessageRole.ASSISTANT,
-                        "",
-                    ),
+                    swarmResponse = null,
+                    executionMode = mode,
+                    messages = it.messages + userMsg,
                     swarmTasks = emptyList(),
                 )
             }
 
-            val mode = localState.value.executionMode
             try {
                 when (mode) {
                     ExecutionMode.SWARM -> {
+                        val assistantId = UUID.randomUUID().toString()
+                        localState.update {
+                            it.copy(
+                                swarmResponse = SwarmResponse(
+                                    messageId = assistantId,
+                                    phase = SwarmPhase.PLANNING,
+                                    summary = "",
+                                    plan = emptyList(),
+                                    thinkingLogs = listOf("Planning swarm…"),
+                                ),
+                                messages = it.messages + AgentMessage(assistantId, MessageRole.ASSISTANT, ""),
+                            )
+                        }
                         val plan = agentRunner.planSwarm(
                             config = config,
                             userTask = text,
@@ -1058,31 +1069,22 @@ class HomeViewModel(
                         }
                     }
                     ExecutionMode.FAST -> {
-                        val historyForRun = history + userMsg
                         AgentExecutionService.startFast(
                             application,
                             text,
-                            historyForRun,
+                            history + userMsg,
                             localState.value.maxToolCalls,
                         )
-                        localState.update { it.copy(isExecuting = true) }
                     }
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
-                localState.update { state ->
-                    state.copy(
-                        isExecuting = false,
-                        swarmResponse = null,
-                        messages = state.messages.filterNot { it.id == assistantId },
-                    )
-                }
+                localState.update { it.copy(isExecuting = false, swarmResponse = null) }
             } catch (e: Exception) {
                 localState.update { state ->
                     state.copy(
                         isExecuting = false,
                         chatError = e.message ?: "Chat request failed",
                         swarmResponse = null,
-                        messages = state.messages.filterNot { it.id == assistantId },
                     )
                 }
             }

@@ -12,7 +12,7 @@ android {
         applicationId = "com.proot"
         minSdk = 26
         targetSdk = 35
-        versionName = "0.21.0-agent-ai"
+        versionName = "0.22.0-kimi-chat"
         versionCode = 78
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

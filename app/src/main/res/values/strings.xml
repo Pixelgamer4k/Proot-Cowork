@@ -190,4 +190,16 @@
     <string name="composer_add_context">Add context block</string>
     <string name="composer_attach_menu">Add attachment or context</string>
     <string name="composer_context_template">Context:\n\n</string>
+
+    <!-- Kimi-style agent chat -->
+    <string name="kimi_empty_title">What can I build for you?</string>
+    <string name="kimi_empty_hint">Describe a task — I\'ll use your Ubuntu desktop, terminal, and files to get it done.</string>
+    <string name="kimi_composer_hint">Ask anything…</string>
+    <string name="kimi_composer_working">Agent working…</string>
+    <string name="kimi_computer_title">Cowork\'s Computer</string>
+    <string name="kimi_computer_working">Using tools in your environment</string>
+    <string name="kimi_computer_done">Task finished</string>
+    <string name="kimi_think_label">Think</string>
+    <string name="kimi_thinking">Planning next steps…</string>
+    <string name="kimi_task_progress">Step %1$d / %2$d</string>
 </resources>

@@ -47,7 +47,7 @@ fun CoworkBottomNav(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CoworkTab.entries.forEach { tab ->
+        CoworkTab.visibleTabs.forEach { tab ->
             CoworkNavItem(tab = tab, selected = tab == selected, onClick = { onSelect(tab) }, modifier = Modifier.weight(1f))
         }
     }
